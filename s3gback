@@ -1,0 +1,337 @@
+#!/usr/bin/env bash
+# ================================================================
+# -*- mode: bash -*-
+# vi: set ft=sh
+# ****************************************************************
+#
+# DESCRIPTION
+#    Backup to S3 and Glacier
+#
+# SYNTAX & EXAMPLES
+#    See 'SYNTAX' (below)
+#
+# ----------------------------------------------------------------
+# IMPLEMENTATION
+#    version         script 0.0.5
+#    author          Greg Milligan
+#    copyright       Copyright (c) 2018 http://xybersolve.io
+#    license         GNU General Public License
+#
+# ================================================================
+#  DEBUG OPTION
+#    set -n  # Uncomment to check your syntax, without execution.
+#    set -x  # Uncomment to debug this shell script
+#
+# ---------------------------------------------------------------
+#
+# TODO:
+# ****************************************************************
+
+
+# ---------------------------------------
+# CONFIGFURATION
+# ---------------------------------------
+# strict environment
+set -o errexit  # exit on command error status
+set -o nounset  # no unreadonlyd variables
+set -o pipefail # failr on pipe failures
+trap 'echo "Aborting due to errexit on line $LINENO. Exit code: ${?}" >&2' ERR
+
+# ---------------------------------------
+# GLOBAL VARIABLES
+# ---------------------------------------
+# booleans
+declare -ir TRUE=1
+declare -ir FALSE=0
+# script info
+
+declare -r PROGNAME="$(basename ${0})"
+declare -r VERSION=0.0.1
+declare -r SUBJECT=""
+declare -r KEYS=""
+declare -ri MIN_ARG_COUNT=1
+declare -r SYNTAX=$(cat <<EOF
+
+    Script: ${PROGNAME}
+    Purpose: Backup to AWS Glacier via S3
+    Usage: ${PROGNAME} [options]
+
+    Options:
+      --help:  help and usage
+      --version: show version info
+
+      --make-bucket: Create bucket dfined in conf file
+      --set-lifecycle: Set bucket lifecycle, to enable Glacier backup, via S3
+      --setup-bucket: Make bucket and set lifecycle
+      --backup: Perform backup across defined directories
+
+      Website deployment routines
+      --sync=<directory>: Synchronize files between project and S3
+      --upload: Upload all pertinent files and directories
+      --updoad-file=<file>: TODO
+      --upload-dir=<directory>: Upload a given directory
+      --delete-file=<file>: TODO
+      --delete-dir=<directory>: Delete a directory
+      --delete-all: Delete all content
+      --delete-logs: Delete all logs
+      --remove-log: Remove the log bucket
+      --list: List all the content
+      --size: show sizes
+
+EOF
+)
+# files & directories
+declare -r SCRIPT_DIR="$( dirname ${0} )"
+declare -r CONF_FILE="${SCRIPT_DIR}/s3gback.conf2.sh"
+
+# actions
+declare -i SETUP_BUCKET=${FALSE}
+declare -i MAKE_BUCKET=${FALSE}
+declare -i SET_LIFECYCLE=${FALSE}
+declare -i BACKUP=${FALSE}
+
+declare -i SYNC=${FALSE}
+declare -i UPLOAD=${FALSE}
+declare -i UPLOAD_DIR=${FALSE}
+declare -i DELETE=${FALSE}
+declare -i DELETE_ALL=${FALSE}
+declare -i DELETE_DIR=${FALSE}
+declare -i DELETE_LOGS=${FALSE}
+declare -i REMOVE_LOG=${FALSE}
+declare -i LIST=${FALSE}
+declare -i SIZE=${FALSE}
+
+# flags
+declare -i DRY_RUN=${FALSE}
+
+# script globals
+declare DIRECTORY=''
+
+# ---------------------------------------
+# COMMON FUNCTIONS
+# ---------------------------------------
+usage() {
+  echo "${SYNTAX}"
+}
+
+error() {
+  printf "\n%s\n" "Error: ${1}"
+}
+
+die() {
+  error "${1}"
+  usage
+  printf "\n\n"
+  exit "${2:-1}"
+}
+
+show_version() {
+  printf "\n\n%s  %s\n\n\n" "${PROGNAME}" "${VERSION}"
+  exit 0
+}
+
+show_help() {
+  printf "\n\n"
+  usage
+  printf "\n\n"
+  exit 0
+}
+
+# ---------------------------------------
+# MAIN ROUTINES
+# ---------------------------------------
+source "${CONF_FILE}" \
+  || die "Unable to open configuration file: ${CONF_FILE}" 1
+#
+# Backup routines
+#
+__setup_bucket() {
+  __make_bucket
+  __set_lifecycle
+}
+
+__make_bucket() {
+  aws s3 mb s3://${BUCKET_NAME}
+}
+
+__set_lifecycle() {
+  aws s3api put-bucket-lifecycle \
+    --bucket ${BUCKET_NAME} \
+    --lifecycle-configuration file://${LIFECYCLE_FILE}
+}
+
+__backup_delete() {
+
+  for dir in "${BACKUP_DIRS[@]}"; do
+    echo "Backing Up: ${dir}"
+    aws s3 sync --delete \
+      ${dir} s3://${BUCKET_NAME} \
+      --include "*" \
+      --exclude ".DS_Store" # --dryrun
+  done
+
+}
+
+__list_glacier() {
+  aws s3api list-objects \
+    –bucket ${BUCKET_NAME} \
+    –prefix ${PREFIX_NAME} \
+    –output json \
+    –query ‘Contents[?StorageClass==GLACIER].[Key]’ \
+
+}
+
+__restore() {
+  aws s3api list-objects \
+    –bucket ${BUCKET_NAME} \
+    –prefix ${PREFIX_NAME} \
+    –output json \
+    –query ‘Contents[?StorageClass==GLACIER].[Key]’ \
+      | jq -r ‘.[] \
+      | “–key ‘\”” + .[0] + “‘\”” ‘ \
+      | xargs -L1 aws s3api restore-object \
+        –restore-request Days=7,GlacierJobParameters={Tier=Expedited} \
+        –bucket ${BUCKET_NAME}
+}
+__check_restore() {
+  aws s3api list-objects \
+    –bucket ${BUCKET_NAME} \
+    –prefix ${PREFIX_NAME} \
+    –output json –query \
+    ‘Contents[?StorageClass==GLACIER].[Key]’ \
+      | jq -r ‘.[] \
+      | “–key ‘\”” + .[0] + “‘\”” ‘ \
+      | xargs -L1 aws s3api head-object \
+      –bucket ${BUCKET_NAME}
+}
+
+__upload() {
+  for file in "${FILES[@]}"; do
+    printf "Copying file: %s\n" "${file}"
+    aws s3 cp "${SITE_DIR}/${file}" s3://${SITE_BUCKET}
+  done
+
+  for dir in "${DIRS[@]}"; do
+    printf "Copying directory: %s\n" "${dir}"
+    aws s3 cp "${SITE_DIR}/${dir}/" s3://${SITE_BUCKET}/${dir} \
+      --recursive \
+      --exclude '*DS_Store*'
+  done
+}
+#
+# Below: Web site deloyment routines
+#
+__sync() {
+  [[ -z "${DIRECTORY}" ]] \
+    && die "Directory argument required. --sync=<directory> is meant to sync a specified directory" 3
+
+  aws s3 sync "${SITE_DIR}/${DIRECTORY}" s3://${SITE_BUCKET}/${DIRECTORY}
+}
+
+__upload_dir() {
+  [[ -z "${DIRECTORY}" ]] && die "Directory argument is required" 2
+
+  aws s3 cp "${SITE_DIR}/${DIRECTORY}/" s3://${SITE_BUCKET}/${DIRECTORY} \
+    --recursive \
+    --exclude '*DS_Store*'
+}
+
+__delete_dir() {
+  aws s3 rm s3://${DIRECTORY}/ --recursive
+}
+
+__delete_all() {
+  aws s3 rm s3://${SITE_BUCKET}/ --recursive
+}
+
+__delete_logs() {
+  aws s3 rm s3://${LOG_BUCKET}/ --recursive
+}
+
+__remove_log() {
+  #__delete_logs
+  aws s3 rb s3://${LOG_BUCKET} --force
+}
+
+__list() {
+  aws s3 ls s3://${SITE_BUCKET}/
+}
+
+__size() {
+  aws s3api list-objects \
+    --bucket ${SITE_BUCKET} \
+    --output text \
+    --query "[sum(Contents[].Size), length(Contents[])]"
+}
+
+__get_opts() {
+  while (( $# > 0 )); do
+    local arg="${1}"; shift;
+    case ${arg} in
+      --help)    show_help                   ;;
+      --version) show_version                ;;
+      --setup-bucket)     SETUP_BUCKET=${TRUE} ;;
+      --make-bucket)      MAKE_BUCKET=${TRUE} ;;
+      --set-lifecycle)    SET_LIFECYCLE=${TRUE} ;;
+      --backup)           BACKUP=${TRUE}     ;;
+      --sync*)            SYNC=${TRUE}
+        [[ ${arg} =~ '=' ]] && DIRECTORY="${arg#*=}"
+        ;;
+      --upload)          UPLOAD=${TRUE}      ;;
+      --delete)          DELETE=${TRUE}      ;;
+      --delete-all)      DELETE_ALL=${TRUE}  ;;
+      --delete-dir*)
+        DELETE_DIR=${TRUE}
+        [[ ${arg} =~ '=' ]] && DIRECTORY="${arg#*=}"
+        ;;
+      --delete-log*)     DELETE_LOGS=${TRUE} ;;
+      --remove-log)      REMOVE_LOG=${TRUE}  ;;
+      --dry-run)         DRY_RUN=${TRUE}     ;;
+      --list)            LIST=${TRUE}        ;;
+      --size)            SIZE=${TRUE}        ;;
+      --upload-dir*)
+        UPLOAD_DIR=${TRUE}
+        [[ ${arg} =~ '=' ]] && DIRECTORY="${arg#*=}"
+        ;;
+      *) die "Unknown option: ${arg}" ;;
+   esac
+  done
+  return 0
+}
+
+__dispatch() {
+  # S3/Glaceir Backup
+  (( SETUP_BUCKET )) && __setup_bucket
+  (( MAKE_BUCKET )) && __make_bucket
+  (( SET_LIFECYCLE )) && __set_lifecycle
+  (( BACKUP )) && __backup_delete
+
+  # S3 Backup
+  (( LIST )) && __list
+  (( SYNC )) && __sync
+  (( UPLOAD )) && __upload
+  (( UPLOAD_DIR )) && __upload_dir
+  (( DELETE )) && __delete
+  (( DELETE_ALL )) && __delete_all
+  (( DELETE_DIR )) && __delete_dir
+  (( DELETE_LOGS )) && __delete_logs
+  (( REMOVE_LOG )) && __remove_log
+  (( SIZE )) && __size
+  return 0
+}
+
+main() {
+  (( ${#} < MIN_ARG_COUNT )) && die "Expects at least ${MIN_ARG_COUNT} arguments" 1
+  (( $# > 0 )) && __get_opts "$@"
+
+  __dispatch
+
+  return 0
+}
+(( ${#} > 0 )) && main "${@}" || main
+
+# "Filter": {
+#   "Prefix": null
+# },
+# "Prefix": None,
+#

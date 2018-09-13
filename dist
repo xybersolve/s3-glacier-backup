@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+#
+#  Distribute scripts to active script bin
+#
+declare PROJECT_DIR=~/bin/s3g-backup
+declare BIN_DIR=~/bin
+
+__copy() {
+  # move project files into script bin
+  local file=''
+  local -ra files=(
+    's3gback'
+    's3gback.conf.sh'
+    's3gback.conf2.sh'
+    's3gback-lifecycle.json'
+    #'s3gback.uploads.txt'
+  )
+  printf "\n"
+  for file in "${files[@]}"; do
+    cp "${file}" "${BIN_DIR}" \
+      && printf "👍🏻  Copied: %s to %s\n" "${file}" "${BIN_DIR}"
+  done
+  printf "\n"
+}
+
+__control() {
+  ssh control mkdir -p /home/ubuntu/bin/xs-swarm
+  scp -r ~/bin/xs-swarm/* control:/home/ubuntu/bin/xs-swarm/
+}
+#
+# Flags are for extensibility
+#
+declare FLAG=${1:-help}
+case ${FLAG} in
+  --copy|copy) __copy; exit 0; ;;
+  --all|all) __copy; exit 0;  ;;
+  --help|help)
+    echo '
+    Usage
+      ./dist --help
+      ./dist --copy
+      ./dist --all
+    '
+    exit 0
+    ;;
+esac
+
+# in case we get no flags, copy (for now)
+__copy
