@@ -64,6 +64,9 @@ declare -r SYNTAX=$(cat <<EOF
       --set-lifecycle: Set bucket lifecycle, to enable Glacier backup, via S3
       --setup-bucket: Make bucket and set lifecycle
       --backup: Perform backup across defined directories
+      --list-s3: List all object still in S3
+      --list-objects: List oblects in Glacier
+      --restore-all: Recursively restore all object back into S3 from Glacier
 
       Website deployment routines
       --sync=<directory>: Synchronize files between project and S3
@@ -89,6 +92,9 @@ declare -i SETUP_BUCKET=${FALSE}
 declare -i MAKE_BUCKET=${FALSE}
 declare -i SET_LIFECYCLE=${FALSE}
 declare -i BACKUP=${FALSE}
+declare -i LIST_OBJECTS=${FALSE}
+declare -i LIST_BUCKET=${FALSE}
+declare -i RESTORE_ALL=${FALSE}
 
 declare -i SYNC=${FALSE}
 declare -i UPLOAD=${FALSE}
@@ -172,37 +178,59 @@ __backup_delete() {
 
 }
 
-__list_glacier() {
-  aws s3api list-objects \
-    –bucket ${BUCKET_NAME} \
-    –prefix ${PREFIX_NAME} \
-    –output json \
-    –query ‘Contents[?StorageClass==GLACIER].[Key]’ \
+__list_objects() {
+  #-–prefix ${PREFIX_NAME} \
 
+  aws s3api list-objects \
+    -–bucket ${BUCKET_NAME}
+    #-–output json \
+    #-–query ‘Contents[?StorageClass==GLACIER].[Key]’
+}
+
+__list_bucket() {
+  aws s3 ls s3://${BUCKET_NAME} --recursive
+}
+
+__restore_all() {
+  s3cmd restore --recursive s3://${BUCKET_NAME}/
+}
+
+__restore_object() {
+  aws s3api restore-object \
+    --bucket "${BUCKET_NAME}" \
+    --key "${KEY}"
+}
+
+__restore_objects() {
+  for key in $(aws s3api list-objects-v2 --bucket ${BUCKET_NAME} --query "Contents[?StorageClass=='GLACIER'].[Key]" --output text); do
+    if [ $(aws s3api head-object --bucket ${BUCKET_NAME} --key ${KEY} --query "contains(Restore, 'ongoing-request=\"false\"')") == true ]; then
+      echo ${key}
+    fi
+  done
 }
 
 __restore() {
   aws s3api list-objects \
-    –bucket ${BUCKET_NAME} \
-    –prefix ${PREFIX_NAME} \
-    –output json \
-    –query ‘Contents[?StorageClass==GLACIER].[Key]’ \
+    -–bucket ${BUCKET_NAME} \
+    -–prefix ${PREFIX_NAME} \
+    -–output json \
+    -–query ‘Contents[?StorageClass==GLACIER].[Key]’ \
       | jq -r ‘.[] \
       | “–key ‘\”” + .[0] + “‘\”” ‘ \
       | xargs -L1 aws s3api restore-object \
-        –restore-request Days=7,GlacierJobParameters={Tier=Expedited} \
-        –bucket ${BUCKET_NAME}
+        -–restore-request Days=7,GlacierJobParameters={Tier=Expedited} \
+        -–bucket ${BUCKET_NAME}
 }
 __check_restore() {
   aws s3api list-objects \
-    –bucket ${BUCKET_NAME} \
-    –prefix ${PREFIX_NAME} \
-    –output json –query \
+    -–bucket ${BUCKET_NAME} \
+    -–prefix ${PREFIX_NAME} \
+    -–output json –query \
     ‘Contents[?StorageClass==GLACIER].[Key]’ \
       | jq -r ‘.[] \
       | “–key ‘\”” + .[0] + “‘\”” ‘ \
       | xargs -L1 aws s3api head-object \
-      –bucket ${BUCKET_NAME}
+      -–bucket ${BUCKET_NAME}
 }
 
 __upload() {
@@ -219,7 +247,7 @@ __upload() {
   done
 }
 #
-# Below: Web site deloyment routines
+# Below: Web site deloyment routines (resource)
 #
 __sync() {
   [[ -z "${DIRECTORY}" ]] \
@@ -268,12 +296,17 @@ __get_opts() {
   while (( $# > 0 )); do
     local arg="${1}"; shift;
     case ${arg} in
-      --help)    show_help                   ;;
-      --version) show_version                ;;
-      --setup-bucket)     SETUP_BUCKET=${TRUE} ;;
-      --make-bucket)      MAKE_BUCKET=${TRUE} ;;
+      --help)    show_help                      ;;
+      --version) show_version                   ;;
+      --setup-bucket)     SETUP_BUCKET=${TRUE}  ;;
+      --make-bucket)      MAKE_BUCKET=${TRUE}   ;;
       --set-lifecycle)    SET_LIFECYCLE=${TRUE} ;;
-      --backup)           BACKUP=${TRUE}     ;;
+      --backup)           BACKUP=${TRUE}        ;;
+      --list-objects)     LIST_OBJECTS=${TRUE}  ;;
+      --list-bucket)      LIST_BUCKET=${TRUE}   ;;
+      --restore-all)      RESTORE_ALL=${TRUE}   ;;
+
+      # Web deployment routines (for resource)
       --sync*)            SYNC=${TRUE}
         [[ ${arg} =~ '=' ]] && DIRECTORY="${arg#*=}"
         ;;
@@ -287,7 +320,7 @@ __get_opts() {
       --delete-log*)     DELETE_LOGS=${TRUE} ;;
       --remove-log)      REMOVE_LOG=${TRUE}  ;;
       --dry-run)         DRY_RUN=${TRUE}     ;;
-      --list)            LIST=${TRUE}        ;;
+
       --size)            SIZE=${TRUE}        ;;
       --upload-dir*)
         UPLOAD_DIR=${TRUE}
@@ -305,9 +338,12 @@ __dispatch() {
   (( MAKE_BUCKET )) && __make_bucket
   (( SET_LIFECYCLE )) && __set_lifecycle
   (( BACKUP )) && __backup_delete
+  (( LIST_OBJECTS )) && __list_objects
+  (( LIST_BUCKET )) && __list_bucket
+  (( RESTORE_ALL )) && __restore_all
 
   # S3 Backup
-  (( LIST )) && __list
+  #(( LIST )) && __list
   (( SYNC )) && __sync
   (( UPLOAD )) && __upload
   (( UPLOAD_DIR )) && __upload_dir
