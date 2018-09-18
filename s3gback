@@ -68,12 +68,15 @@ declare -r SYNTAX=$(cat <<EOF
         --list: List or bucket contents, optionally by prefix
         --view: View bucket object info, optionally by prefix
         --size: View size of objects in bucket, optionally by prefix
+        --size-all: View size of all buckets (can be slow)
         --restore: Restore objects back into S3 from Glacier
+        --get<=/pat/to/file>: Get a file from S3 copying to local file
         --delete: delete bucket or object, optionaly by prefix
 
 
       Variables & Flags:
         --prefix=<prefix>: define prefix to work on (list, view, size, delete, restore, etc)
+        --local=/dir/file: Local file or directory
         --brief: Boolean flag for short display
 
 
@@ -83,7 +86,10 @@ declare -r SYNTAX=$(cat <<EOF
         ${PROGNAME} --list [--prefix=<prefix>]
         ${PROGNAME} --view [--prefix=<prefix>]
         ${PROGNAME} --size [--prefix=<prefix>]
+        ${PROGNAME} --size-all
         ${PROGNAME} --restore
+        ${PROGNAME} --get='/path/to/file.jpg' --local='file-copy.jpg'
+        ${PROGNAME} --get='/path/to/dir' --local='/directory'
         ${PROGNAME} --delete [--prefix=<prefix>]
 
 EOF
@@ -100,9 +106,11 @@ declare -i BACKUP=${FALSE}
 declare -i VIEW=${FALSE}
 declare -i LIST=${FALSE}
 declare -i SIZE=${FALSE}
+declare -i SIZE_ALL=${FALSE}
 declare -i DELETE=${FALSE}
 declare -i RESTORE=${FALSE}
 declare -i RESTORE_ALL=${FALSE}
+declare -i GET=${FALSE}
 
 #declare -i LIST_OBJECTS=${FALSE}
 #declare -i LIST_ALL=${FALSE}
@@ -121,6 +129,7 @@ declare -i BRIEF=${FALSE}
 # script globals
 declare DIRECTORY=''
 declare PREFIX=''
+declare LOCAL=''
 
 # ---------------------------------------
 # COMMON FUNCTIONS
@@ -170,20 +179,19 @@ __make_bucket() {
 }
 
 __set_lifecycle() {
-
   aws s3api put-bucket-lifecycle \
     --bucket ${BUCKET_NAME} \
     --lifecycle-configuration file://${LIFECYCLE_FILE}
 }
 
-__backup_delete() {
+__backup() {
   # delete remote files no longer in content
   for dir in "${BACKUP_DIRS[@]}"; do
     echo "Backing Up: ${dir}"
     aws s3 sync --delete \
       ${dir} s3://${BUCKET_NAME} \
-      --include "*" \
-      --exclude "*/.DS_Store" # --dryrun
+      --include "*"
+      #--exclude "*/.DS_Store" # --dryrun
   done
 
 }
@@ -208,24 +216,34 @@ __list() {
 #     || aws s3 ls s3://${BUCKET_NAME}/ --recursive
 # }
 
+__size_all() {
+  # get size of all buckets
+  s3cmd du "s3://"
+}
+
 __size() {
 
   # use s3cmd
   # s3cmd du s3://${BUCKET_NAME}/${PREFIX}
+  if [[ -n ${PREFIX} ]]; then
+    s3cmd du "s3://${BUCKET_NAME}/${PREFIX}"
+  else
+    s3cmd du "s3://${BUCKET_NAME}"
+  fi
 
   # use s3api
-  if [[ -n ${PREFIX} ]]; then
-    aws s3api list-objects \
-      --bucket ${BUCKET_NAME} \
-      --prefix ${PREFIX} \
-      --output table \
-      --query "[Contents[].Key, Contents[].Size]"
-  else
-    aws s3api list-objects \
-      --bucket ${BUCKET_NAME} \
-      --output table \
-      --query "[Contents[].Key, Contents[].Size]"
-  fi
+  # if [[ -n ${PREFIX} ]]; then
+  #   aws s3api list-objects \
+  #     --bucket "${BUCKET_NAME}" \
+  #     --prefix "${PREFIX}" \
+  #     --output table \
+  #     --query "[Contents[].Key, Contents[].Size]"
+  # else
+  #   aws s3api list-objects \
+  #     --bucket "${BUCKET_NAME}" \
+  #     --output table \
+  #     --query "[Contents[].Key, Contents[].Size]"
+  # fi
 }
 
 __view() {
@@ -248,18 +266,37 @@ __delete() {
     || aws s3 rm s3://${BUCKET_NAME} --recursive
 }
 
+__get_file() {
+  # using s3cmd
+  if [[ -n ${PREFIX} ]]; then
+    s3cmd get "s3://${BUCKET_NAME}/${PREFIX}" "${LOCAL}"
+  else
+    s3cmd get --recursive "s3://${BUCKET_NAME}" "${LOCAL}"
+  fi
+}
+
 __restore() {
   # using s3cmd
   #s3cmd restore --recursive s3://${BUCKET_NAME}/${PREFIX}/
-
-  # using s3api
   if [[ -n ${PREFIX} ]]; then
-    aws s3api restore-object \
-      --bucket ${BUCKET_NAME} \
-      --key ${PREFIX} \
-      --restore-request '{"Days":25,"GlacierJobParameters":{"Tier":"Standard"}}'
+    s3cmd restore "s3://${BUCKET_NAME}/${PREFIX}"
+  else
+    s3cmd restore "s3://${BUCKET_NAME}" --recursive
   fi
 
+  # using s3api
+  # if [[ -n ${PREFIX} ]]; then
+  #   aws s3api restore-object \
+  #     --bucket ${BUCKET_NAME} \
+  #     --key ${PREFIX} \
+  #     --restore-request '{"Days":5,"GlacierJobParameters":{"Tier":"Standard"}}'
+  # else
+  #   aws s3api restore-object \
+  #     --bucket ${BUCKET_NAME} \
+  #     --restore-request '{"Days":5,"GlacierJobParameters":{"Tier":"Standard"}}'
+  # fi
+
+  # more loquaciopus methods of __restore3
   # if [[ -n ${PREFIX} ]]; then
   #   aws s3api list-objects \
   #     -–bucket ${BUCKET_NAME} \
@@ -310,8 +347,12 @@ __get_opts() {
       --backup)           BACKUP=${TRUE}        ;;
       --list|--view)      LIST=${TRUE}          ;;
       --size)             SIZE=${TRUE}          ;;
+      --size-all)         SIZE_ALL=${TRUE}      ;;
       --restore)          RESTORE=${TRUE}       ;;
       --restore-all)      RESTORE_ALL=${TRUE}   ;;
+      --get*)             GET=${TRUE}
+        [[ ${arg} =~ '=' ]] && PREFIX="${arg#*=}"
+        ;;
       --delete)           DELETE=${TRUE}        ;;
 
       # Variables & Flags
@@ -319,7 +360,9 @@ __get_opts() {
       --prefix*)
         [[ ${arg} =~ '=' ]] && PREFIX="${arg#*=}"
         ;;
-
+      --local*)
+        [[ ${arg} =~ '=' ]] && LOCAL="${arg#*=}"
+        ;;
 
       # # Web deployment routines (for resource)
       # --list-objects)     LIST_OBJECTS=${TRUE}  ;;
@@ -353,13 +396,15 @@ __dispatch() {
   (( SETUP_BUCKET )) && __setup_bucket
   (( MAKE_BUCKET )) && __make_bucket
   (( SET_LIFECYCLE )) && __set_lifecycle
-  (( BACKUP )) && __backup_delete
+  (( BACKUP )) && __backup
   (( LIST )) && __list
   (( VIEW )) && __view
   (( RESTORE )) && __restore
   (( RESTORE_ALL )) && __restore_all
+  (( GET )) && __get_file
   (( DELETE )) && __delete
   (( SIZE )) && __size
+  (( SIZE_ALL )) && __size_all
 
   # S3 Backup
   # (( LIST_OBJECTS )) && __list_objects

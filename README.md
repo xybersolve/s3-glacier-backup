@@ -113,7 +113,8 @@ $ s3gback --help
           --view: View bucket object info, optionally by prefix
           --size: View size of objects in bucket, optionally by prefix
           --restore: Restore objects back into S3 from Glacier
-          --delete: delete bucket or object, optionaly by prefix
+          --get<=/path/to/file>: Get a file from S3 copying to local file
+          --delete: delete bucket or object, optionally by prefix
 
         Variables & Flags:
           --prefix=<prefix>: define prefix to work on (list, view, size, delete, restore, etc)
@@ -126,7 +127,11 @@ $ s3gback --help
           s3gback --view [--prefix=<prefix>]
           s3gback --size [--prefix=<prefix>]
           s3gback --restore
-          s3gback --delete [--prefix=<prefix>]
+          s3gback --restore --prefix='/path/to/file'
+          s3gback --get='/path/to/file.jpg' --local='file-copy.jpg'
+          s3gback --delete
+          s3gback --delete --prefix='/path/to/file'
+
 
 
 
