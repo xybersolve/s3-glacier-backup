@@ -26,5 +26,4 @@ node_modules
 npm-debug.log
 
 # project specific
-s3gback.conf2.sh
-s3gback.conf.sh
+s3gback.conf*.sh

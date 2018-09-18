@@ -1,11 +1,11 @@
 {
   "Rules": [
     {
-      "ID": "Lifecycle Glacier promotion (0 days) for entire bucket",
+      "ID": "Lifecycle Glacier promotion (1 day) for entire bucket",
       "Status": "Enabled",
       "Prefix": "",
       "Transition": {
-          "Days": 0,
+          "Days": 1,
           "StorageClass": "GLACIER"
       }
     }
