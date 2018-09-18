@@ -1,9 +1,59 @@
 # s3-glacier-backups
 
-> Backup predefined directories (gback.conf.sh) into Glacier via S3
+I backup my photographic prints to cold storage in Glacier. This scripts
+make it easy to predefine directories for backup. It also provides some
+other s3/Glacier utilities. The backup script is automated via a cronjob.
 
-### Notes:
-gback.conf.sample.sh: stubbed out sample of actual required configuration file.
+
+Run at 2pm daily: 
+
+```sh
+
+0 14 * * * /Users/Greg/bin/s3g-back --backup
+
+```
+
+## Why Glacier via S3?
+Glacier is great for inexpensive cold storage backups. Uusing S3 as a
+conduit enables better views and control of said content.
+
+### Backup via S3
+S3 backup to Glacier consists of setting the `lifecycle` rule with a `storageClass`
+of `GLACIER` and a short `Days` interval. Below, the lifecycle configuration is
+configured for immediate transition to Glacier. There is no `Prefix` set, which
+implies the entire bucket. Prefix can be used to target specific directories
+within the bucket.
+
+`s3gback-lifecycle.json`
+
+```
+{
+  "Rules": [
+    {
+      "ID": "Lifecycle Glacier promotion (0 days) for entire bucket",
+      "Status": "Enabled",
+      "Prefix": "",
+      "Transition": {
+          "Days": 0,
+          "StorageClass": "GLACIER"
+      }
+    }
+  ]
+}
+
+```
+
+### Restore via S3:
+Once the S3 content is transitioned to `GLACIER`, it must be restored to S3
+before they are once again accessible. Like:
+
+```
+
+
+```
+
+### Note:
+`gback.conf.sample.sh` is a stubbed out sample of required configuration file.
 
 > To define backup jobs, do following and then define AWS and local variables
 within conf file.
@@ -11,6 +61,7 @@ within conf file.
 ```sh
 
 $ cp s3gback.conf.sample.sh s3gback.conf.sh
+$ vim s3back-conf.sh
 
 ```
 
