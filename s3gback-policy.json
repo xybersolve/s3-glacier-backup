@@ -1,0 +1,40 @@
+{
+"Version": "2012-10-17",
+"Statement": [
+    {
+        "Sid": "o85ljnagp9q3tdlkg",
+        "Effect": "Allow",
+        "Action": [
+            "s3:ListBucket",
+            "s3:GetObject",
+            "s3:PutObject"
+        ],
+        "Resource": [
+            "arn:aws:s3:::*"
+        ],
+        "Principal": {
+          "AWS": [
+            "arn.aws.iam."
+          ]
+        }
+    }
+]
+}
+
+{
+"Version": "2012-10-17",
+"Statement": [
+  {
+      "Action": [
+        "s3:ListBucket",
+        "s3:GetObject",
+        "s3:GetObjectAcl"
+      ],
+      "Resource": [
+        "arn:aws:s3:::*",
+        "arn:aws:s3:::*/*",
+      ],
+      "Effect": "Allow"
+    }
+  ]
+}
