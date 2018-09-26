@@ -17,10 +17,10 @@ declare -ra BACKUP_DIRS=(
 #
 #   Back Up Bucket Sets
 #   Associative array defines:
-#    ['/directory/to/backuo']='unique-bucket/prefix'
+#    ['/directory/to/backup']='unique-bucket/prefix'
 #
-# Backup different sets of directories to assigned buckets
-# Common base directory for all backup directories
+# Backup sets of directories to assigned buckets
+# Use common base directory for al directories, prepended to backup directory
 declare BASE_DIR=/Users/Name
 
 # [/directory/to/backup]=unique-bucket/prefix

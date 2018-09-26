@@ -70,7 +70,8 @@ declare -r SYNTAX=$(cat <<EOF
         --size-all: View size of all buckets (can be slow)
         --restore: Restore objects back into S3 from Glacier (bucket/prefix or all)
         --get<=/path/to/file>: Get a file from S3 copying to local file
-        --delete: delete bucket or object, optionally using prefix
+        --delete: Delete bucket or object, optionally using prefix
+        --schedule: Schedule the archive to be run as cronjob
 
 
       Variables & Flags:
@@ -114,11 +115,14 @@ declare -i SIZE_ALL=${FALSE}
 declare -i DELETE=${FALSE}
 declare -i RESTORE=${FALSE}
 declare -i GET=${FALSE}
+declare -i SCHEDULE=${FALSE}
 
 # flags
 declare -i DRYRUN=${FALSE}
 declare -i BRIEF=${FALSE}
 declare -i VERBOSE=${FALSE}
+declare -i SMS=${FALSE}
+declare -i EMAIL=${FALSE}
 
 # script globals
 declare DIRECTORY=''
@@ -415,6 +419,22 @@ __restore() {
   fi
 }
 
+__schedule() {
+  local cron_dir="${SCRIPT_DIR}/crontab"
+  local cron_file="${cron_dir}/tmpcron"
+  mkdir -p "${cron_dir}"
+  crontab -l > "${cron_file}"
+
+  # this is the meat of it
+  # locally - ${HOME}/bin (SCRIPT_DIR) is where my bash script always reside
+  # -- adjust accordingly
+  echo "0 14 * * * ${SCRIPT_DIR}/s3gback --backup" >> "${cron_file}"
+  #install new cron file
+  crontab "${cron_file}"
+  # cleanup
+  rm "${cron_file}"
+}
+
 
 __get_opts() {
   while (( $# > 0 )); do
@@ -441,6 +461,7 @@ __get_opts() {
         [[ ${arg} =~ '=' ]] && PREFIX="${arg#*=}"
         ;;
       --delete)           DELETE=${TRUE}        ;;
+      --schedule)         SCHEDULE=${TRUE}      ;;
 
       # Variables & Flags
       --brief)            BRIEF=${TRUE}         ;;
@@ -475,6 +496,7 @@ __dispatch() {
   (( DELETE )) && __delete
   (( SIZE )) && __size
   (( SIZE_ALL )) && __size_all
+  (( SCHEDULE )) && __schedule
 
   return 0
 }
