@@ -122,7 +122,7 @@ declare -i DRYRUN=${FALSE}
 declare -i BRIEF=${FALSE}
 declare -i VERBOSE=${FALSE}
 declare -i SMS=${FALSE}
-declare -i EMAIL=${FALSE}
+
 
 # script globals
 declare DIRECTORY=''
