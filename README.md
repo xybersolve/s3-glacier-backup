@@ -6,10 +6,12 @@ specific S3 buckets and transitioned into Glacier storage for more cost effectiv
 long term archive. It also provides some other s3/Glacier view utilities.
 The backup script can be automated via a cronjob.
 
-> Note: Glacier is not for data which may need to be restored quickly,
-for that I might suggest S3. As an example, I archive my photographic prints
-to cold storage in Glacier, in case of catastrophic loss of my other backup
-medium.
+> This script depends on `aws s3`, `s3cmd` & `s3api`
+
+> Glacier is not a good choice for data which may need to be restored quickly,
+for that I would suggest S3. As an example, I archive my photographic prints
+to 'cold storage' in Glacier, in case of catastrophic loss of my other backup
+medium. I store data essential to system recovery in S3.
 
 ## Why Glacier via S3?
 Glacier is great for inexpensive cold storage backups. Using S3 as a

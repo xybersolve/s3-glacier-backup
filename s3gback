@@ -176,20 +176,12 @@ confirm() {
 # ---------------------------------------
 source "${CONF_FILE}" \
   || die "Unable to open configuration file: ${CONF_FILE}" 1
-#
-# Backup routines
-#
-__bucket_exists() {
-  # check if a bucket exists
-  local bucket="${1:-${BUCKET_NAME}}"
-  local -i result=0
-  aws s3 ls "s3://${bucket}"
-  if aws s3 ls "s3://${bucket}" 2>&1 | grep -q 'NoSuchBucket'; then
-    return 1
-  fi
-  return 0
-}
 
+# ********************************
+# Bucket creation routines
+# ********************************
+
+# create & set lifecycle
 __setup_bucket() {
   local -r bucket="${1:-${BUCKET_NAME}}"
   __make_bucket "${bucket}"
@@ -218,6 +210,17 @@ __set_lifecycle() {
     --lifecycle-configuration "file://${LIFECYCLE_FILE}"
 }
 
+# check whether bucket exists
+__bucket_exists() {
+  # check if a bucket exists
+  local bucket="${1:-${BUCKET_NAME}}"
+
+  aws s3api head-bucket --bucket "${bucket}" 2>/dev/null \
+    || return 1
+
+  return 0
+
+}
 __ensure_bucket() {
   # check if bucket exists and create if necessary
   local -r bucket="${1:-${BUCKET_NAME}}"
@@ -244,9 +247,23 @@ __ensure_buckets() {
   done
 }
 
-__get_set_buckets() {
-  echo "${BACKUP_BUCKET_SETS[*]}"
+__delete() {
+  local bucket
+
+  [[ -z ${BUCKET_NAME} ]] && die "Bucket name is a required argument" 5
+
+  if confirm "Are you sure you want to delete: ${BUCKET_NAME}/${PREFIX}"; then
+    [[ -n ${PREFIX} ]] \
+      && echo aws s3 rm s3://${BUCKET_NAME}/${PREFIX} \
+      || echo aws s3 rm s3://${BUCKET_NAME} --recursive
+  else
+    echo "User aborted!"
+  fi
 }
+
+# ********************************
+# Backup routines
+# ********************************
 
 # backup sets as defined in config file
 __backup_sets() {
@@ -278,15 +295,19 @@ __backup_sets() {
 
       if (( USE_S3CMD )); then
 
-      s3cmd sync \
-        --exclude-from=${EXCLUDE_LIST_FILE} \
-        --delete-removed  --delete-after \
-        --skip-existing \
-        --preserve \
-        --human-readable-size \
-        ${show_errors_only} ${dryrun} ${verbose} ${src} s3://${dst}
+        (( VERBOSE )) && echo "Using: s3cmd"
+
+        s3cmd sync \
+          --exclude-from=${EXCLUDE_LIST_FILE} \
+          --delete-removed  --delete-after \
+          --skip-existing \
+          --preserve \
+          --human-readable-size \
+          ${show_errors_only} ${dryrun} ${verbose} ${src} s3://${dst}/
 
       else
+
+        (( VERBOSE )) && echo "Using: aws s3"
 
         aws s3 sync --delete \
           ${src} s3://${dst} \
@@ -339,27 +360,52 @@ __backup() {
     --exclude "*node_modules/*" ${dryrun}
 }
 
-# # simple backup
-# # TODO: revert to single directory to bucket argument driven backup
-# __backup() {
-#   local dryrun=$( (( DRYRUN )) && echo '--dryrun' || echo '' )
-#   # back up and
-#   # delete remote files which are no longer in content
-#   for dir in "${BACKUP_DIRS[@]}"; do
-#     (( VERBOSE )) &&  echo "Backing Up: ${dir}"
-#     aws s3 sync --delete \
-#       ${dir} s3://${BUCKET_NAME} \
-#       --include "*" \
-#       --exclude "*/.DS_Store" \
-#       --exclude "*.git/*" \
-#       --exclude "*venv/*" \
-#       --exclude "*site-packages/*" \
-#       --exclude "*bower_components/*" \
-#       --exclude "*lib/python*" \
-#       --exclude "*include/python*" \
-#       --exclude "*node_modules/*" ${dryrun}
-#   done
-# }
+__restore() {
+  # using s3cmd
+  #s3cmd restore --recursive s3://${BUCKET_NAME}/${PREFIX}/
+  if [[ -n ${PREFIX} ]]; then
+    s3cmd restore "s3://${BUCKET_NAME}/${PREFIX}"
+  else
+    s3cmd restore "s3://${BUCKET_NAME}" --recursive
+  fi
+}
+
+__monitor_restore() {
+  aws s3api head-object \
+    --bucket ${BUCKET_NAME} \
+    --key ${PREFIX}
+}
+
+
+__get_file() {
+  # using s3cmd
+  if [[ -n ${PREFIX} ]]; then
+    s3cmd get "s3://${BUCKET_NAME}/${PREFIX}" "${LOCAL}"
+  else
+    s3cmd get --recursive "s3://${BUCKET_NAME}" "${LOCAL}"
+  fi
+}
+
+# setup scheduled backuop using crontab
+__schedule() {
+  local cron_dir="${SCRIPT_DIR}/crontab"
+  local cron_file="${cron_dir}/tmpcron"
+  mkdir -p "${cron_dir}"
+  crontab -l > "${cron_file}"
+
+  # this is the meat of it
+  # locally - ${HOME}/bin (SCRIPT_DIR) is where my bash script always reside
+  # -- adjust accordingly
+  echo "0 14 * * * ${SCRIPT_DIR}/s3gback --backup" >> "${cron_file}"
+  #install new cron file
+  crontab "${cron_file}"
+  # cleanup
+  rm "${cron_file}"
+}
+
+# ********************************
+# Feedback routines
+# ********************************
 
 __list() {
   [[ -n ${PREFIX} ]] \
@@ -407,61 +453,6 @@ __view() {
   fi
 }
 
-__delete() {
-  local bucket
-
-  [[ -z ${BUCKET_NAME} ]] && die "Bucket name is a required argument" 5
-
-  if confirm "Are you sure you want to delete: ${BUCKET_NAME}/${PREFIX}"; then
-    [[ -n ${PREFIX} ]] \
-      && echo aws s3 rm s3://${BUCKET_NAME}/${PREFIX} \
-      || echo aws s3 rm s3://${BUCKET_NAME} --recursive
-  else
-    echo "User aborted!"
-  fi
-}
-
-__get_file() {
-  # using s3cmd
-  if [[ -n ${PREFIX} ]]; then
-    s3cmd get "s3://${BUCKET_NAME}/${PREFIX}" "${LOCAL}"
-  else
-    s3cmd get --recursive "s3://${BUCKET_NAME}" "${LOCAL}"
-  fi
-}
-
-__monitor_restore() {
-  aws s3api head-object \
-    --bucket ${BUCKET_NAME} \
-    --key ${PREFIX}
-}
-
-__restore() {
-  # using s3cmd
-  #s3cmd restore --recursive s3://${BUCKET_NAME}/${PREFIX}/
-  if [[ -n ${PREFIX} ]]; then
-    s3cmd restore "s3://${BUCKET_NAME}/${PREFIX}"
-  else
-    s3cmd restore "s3://${BUCKET_NAME}" --recursive
-  fi
-}
-
-__schedule() {
-  local cron_dir="${SCRIPT_DIR}/crontab"
-  local cron_file="${cron_dir}/tmpcron"
-  mkdir -p "${cron_dir}"
-  crontab -l > "${cron_file}"
-
-  # this is the meat of it
-  # locally - ${HOME}/bin (SCRIPT_DIR) is where my bash script always reside
-  # -- adjust accordingly
-  echo "0 14 * * * ${SCRIPT_DIR}/s3gback --backup" >> "${cron_file}"
-  #install new cron file
-  crontab "${cron_file}"
-  # cleanup
-  rm "${cron_file}"
-}
-
 
 __get_opts() {
   while (( $# > 0 )); do
@@ -487,10 +478,6 @@ __get_opts() {
 
       --delete)           DELETE=${TRUE}        ;;
       --schedule)         SCHEDULE=${TRUE}      ;;
-      --get-set-buckets)
-        __get_set_buckets
-        exit 0
-        ;;
       --get*)             GET=${TRUE}
         [[ ${arg} =~ '=' ]] && PREFIX="${arg#*=}"
         ;;
