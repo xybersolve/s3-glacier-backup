@@ -1,0 +1,12 @@
+*/.DS_Store
+*/.git/*
+*/venv/*
+*/.terraform*
+*/.vagrant/*
+*/site-packages/*
+*/bower_components/*
+*/.Python/*
+*/lib/python*
+*/include/python*
+*/lock.json
+*/node_modules/*

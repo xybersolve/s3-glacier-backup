@@ -100,7 +100,7 @@ EOF
 )
 # files & directories
 declare -r SCRIPT_DIR="$( dirname ${0} )"
-declare -r CONF_FILE="${SCRIPT_DIR}/s3gback.conf2.sh"
+declare -r CONF_FILE="${SCRIPT_DIR}/s3gback.conf3.sh"
 declare -r EXCLUDE_LIST_FILE="${SCRIPT_DIR}/s3gback-exclude-list.dat"
 
 # actions
@@ -123,7 +123,7 @@ declare -i DRYRUN=${FALSE}
 declare -i BRIEF=${FALSE}
 declare -i VERBOSE=${FALSE}
 declare -i SMS=${FALSE}
-declare -i USE_S3CMD=${FALSE}
+declare -i USE_S3CMD=${TRUE}
 
 # script globals
 declare DIRECTORY=''
