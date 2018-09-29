@@ -101,6 +101,7 @@ EOF
 # files & directories
 declare -r SCRIPT_DIR="$( dirname ${0} )"
 declare -r CONF_FILE="${SCRIPT_DIR}/s3gback.conf2.sh"
+declare -r EXCLUDE_LIST_FILE="${SCRIPT_DIR}/s3gback-exclude-list.dat"
 
 # actions
 declare -i SETUP_BUCKET=${FALSE}
@@ -122,7 +123,7 @@ declare -i DRYRUN=${FALSE}
 declare -i BRIEF=${FALSE}
 declare -i VERBOSE=${FALSE}
 declare -i SMS=${FALSE}
-
+declare -i USE_S3CMD=${FALSE}
 
 # script globals
 declare DIRECTORY=''
@@ -243,13 +244,23 @@ __ensure_buckets() {
   done
 }
 
+__get_set_buckets() {
+  echo "${BACKUP_BUCKET_SETS[*]}"
+}
+
 # backup sets as defined in config file
 __backup_sets() {
   local dir
   local bucket
   local src
   local dst
-  local dryrun=$( (( DRYRUN )) && echo '--dryrun' || echo '' )
+  local verbose=''
+  #local dryrun=$( (( DRYRUN )) && echo '--dryrun' || echo '' )
+  local dryrun=$( (( DRYRUN )) && echo '--dry-run' || echo '' )
+  local verbose=$( (( VERBOSE )) && echo '--verbose' || echo '' )
+  # TODO: Make into flag (arg driven)
+  #local show_errors_only='--show-errors-only'
+  local show_errors_only=''
 
   # backup all sets as defined in config file
   # make sure buckets exist
@@ -265,23 +276,40 @@ __backup_sets() {
       dst="${bucket}/${dir}"
       (( VERBOSE )) && echo "Backing up: ${src} -> ${dst}"
 
-      aws s3 sync --delete \
-        ${src} s3://${dst} \
-        --include "*" \
-        --exclude "*/.DS_Store" \
-        --exclude "*.git/*" \
-        --exclude "*venv/*" \
-        --exclude "*site-packages/*" \
-        --exclude "*bower_components/*" \
-        --exclude "*lib/python*" \
-        --exclude "*include/python*" \
-        --exclude "*node_modules/*" ${dryrun}
+      if (( USE_S3CMD )); then
+
+      s3cmd sync \
+        --exclude-from=${EXCLUDE_LIST_FILE} \
+        --delete-removed  --delete-after \
+        --skip-existing \
+        --preserve \
+        --human-readable-size \
+        ${show_errors_only} ${dryrun} ${verbose} ${src} s3://${dst}
+
+      else
+
+        aws s3 sync --delete \
+          ${src} s3://${dst} \
+          --include "*" \
+          --exclude "*/.DS_Store" \
+          --exclude "*/.git/*" \
+          --exclude "*/venv/*" \
+          --exclude "*/.terraform*" \
+          --exclude "*/site-packages/*" \
+          --exclude "*/bower_components/*" \
+          --exclude "*/.Python/*" \
+          --exclude "*/lib/python*" \
+          --exclude "*/include/python*" \
+          --exclude "*/lock.json" \
+          --exclude "*/node_modules/*" "${show_errors_only}" "${dryrun}"
+
+        fi
       done
   done
 }
 
 # Refactored" 9/25/18
-# simple command line driven backup
+# simple one off - command line driven backup
 __backup() {
   local dryrun=$( (( DRYRUN )) && echo '--dryrun' || echo '' )
   local bucket
@@ -391,7 +419,6 @@ __delete() {
   else
     echo "User aborted!"
   fi
-
 }
 
 __get_file() {
@@ -457,12 +484,16 @@ __get_opts() {
       --size)             SIZE=${TRUE}          ;;
       --size-all)         SIZE_ALL=${TRUE}      ;;
       --restore)          RESTORE=${TRUE}       ;;
+
+      --delete)           DELETE=${TRUE}        ;;
+      --schedule)         SCHEDULE=${TRUE}      ;;
+      --get-set-buckets)
+        __get_set_buckets
+        exit 0
+        ;;
       --get*)             GET=${TRUE}
         [[ ${arg} =~ '=' ]] && PREFIX="${arg#*=}"
         ;;
-      --delete)           DELETE=${TRUE}        ;;
-      --schedule)         SCHEDULE=${TRUE}      ;;
-
       # Variables & Flags
       --brief)            BRIEF=${TRUE}         ;;
       --verbose)          VERBOSE=${TRUE}       ;;
