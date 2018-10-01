@@ -100,6 +100,7 @@ EOF
 )
 # files & directories
 declare -r SCRIPT_DIR="$( dirname ${0} )"
+declare -r COMMON_FILE="${SCRIPT_DIR}/s3gback.common.sh"
 declare -r CONF_FILE="${SCRIPT_DIR}/s3gback.conf3.sh"
 declare -r EXCLUDE_LIST_FILE="${SCRIPT_DIR}/s3gback-exclude-list.dat"
 
@@ -174,8 +175,13 @@ confirm() {
 # ---------------------------------------
 # MAIN ROUTINES
 # ---------------------------------------
+source "${COMMON_FILE}" \
+  || die "Unable to open configuration file: ${COMMON_FILE}" 1
+
 source "${CONF_FILE}" \
   || die "Unable to open configuration file: ${CONF_FILE}" 1
+
+declare -r TOPIC_ARN="arn:aws:sns:${REGION}:${ACCOUNT_ID}:${TOPIC_NAME}"
 
 # ********************************
 # Bucket creation routines
@@ -453,6 +459,76 @@ __view() {
   fi
 }
 
+# ********************************
+# Messaging routines
+# ********************************
+
+# TODO: Wire up SNS Messaging
+__create_topic() {
+  [[ -z "${TOPIC_ARN}" ]] && die "TOPIC_NAME is not defined" 3
+
+  aws sns create-topic --name "${TOPIC_NAME}"
+}
+
+
+__subscribe() {
+  [[ -z "${TOPIC_ARN}" ]] && die "TOPIC_ARN is not defined" 4
+  [[ -z "${ADMIN_EMAIL}" ]] && die "ADMIN_EMAIL is not defined" 5
+
+  aws sns subscribe \
+    --topic-arn "${TOPIC_ARN}" \
+    --protocol email \
+    --notification-endpoint "${ADMIN_EMAIL}"
+}
+
+__unsubscribe() {
+  local url='https://sns.us-west-2.amazonaws.com/unsubscribe.html?SubscriptionArn=arn:aws:sns:us-west-2:734741078887:S3-Glacier-Backup:7b399f3f-8ac4-4fb7-82a3-4447274632e4&Endpoint=xybersolve@gmail.com'
+  local url2="https://sns.${REGION}.amazonaws.com/unsubscribe.html?SubscriptionArn=arn:${TOPIC_ARN}:${SUBSCRIPTION_ID}&Endpoint=${ADMIN_EMAIL}"
+}
+
+__check_topic() {
+  aws sns list-subscriptions --output text \
+    | grep -q "${TOPIC_ARN}" \
+      && return 0 \
+      || return 1
+
+}
+
+__setup_topic() {
+  if ! __check_topic; then
+    (( VERBOSE )) && echo Creating topic: does not exist
+    __create_topic
+    __subscribe
+  else
+    echo topic exists
+  fi
+}
+
+
+__send() {
+  local message="${1:-${DEFAULT_MESSAGE}}"
+  local datetime=$( date +%Y%m%d:%H:%M:%S )
+
+  aws sns publish \
+    --topic-arn "${TOPIC_ARN}" \
+    --subject "${TOPIC_SUBJECT}" \
+    --message "${message} at ${datetime}"
+}
+
+__get_subscriptions() {
+  aws sns list-subscriptions
+}
+
+__delete_topic() {
+
+  if __check_topic; then
+    aws sns delete-topic \
+      --topic-arn "${TOPIC_ARN}"
+  else
+    echo "Topic does not exist!"
+  fi
+}
+
 
 __get_opts() {
   while (( $# > 0 )); do
@@ -480,6 +556,18 @@ __get_opts() {
       --schedule)         SCHEDULE=${TRUE}      ;;
       --get*)             GET=${TRUE}
         [[ ${arg} =~ '=' ]] && PREFIX="${arg#*=}"
+        ;;
+      --setup-topic) # debug
+        __setup_topic
+        exit 0
+        ;;
+      --delete-topic)
+        __delete_topic
+        exit 0
+        ;;
+      --send)
+        __send
+        exit 0
         ;;
       # Variables & Flags
       --brief)            BRIEF=${TRUE}         ;;

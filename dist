@@ -10,6 +10,7 @@ __copy() {
   local file=''
   local -ra files=(
     's3gback'
+    's3gback.common.sh'
     's3gback.conf1.sh'
     's3gback.conf2.sh'
     's3gback.conf3.sh'
