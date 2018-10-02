@@ -53,7 +53,10 @@ declare -ri MIN_ARG_COUNT=1
 declare -r SYNTAX=$(cat <<EOF
 
     Script: ${PROGNAME}
-    Purpose: Backup to AWS Glacier via S3
+    Purpose: Backup directory sets to AWS Glacier via S3
+    Description: Define bucket for directory set backups in conf file, set conf
+      using --backup=conf-file-name-part
+
     Usage: ${PROGNAME} [options]
 
     Options:
@@ -62,8 +65,8 @@ declare -r SYNTAX=$(cat <<EOF
 
       Actions:
         --setup-bucket=mybucket: Make bucket and set lifecycle
-        --backup: Simple command line driven backup
-        --backup-sets: Backup sets of defined directories into assigned buckets
+        --backup=<conf-name>: Backup sets of directories into assigned buckets
+            conf-name: defaults to 'xybersolve'
         --list: List or bucket contents, optionally by prefix
         --view: View bucket object info, optionally by prefix
         --size: View size of objects in bucket, optionally by prefix
@@ -76,8 +79,6 @@ declare -r SYNTAX=$(cat <<EOF
 
       Variables & Flags:
         --verbose: Enable feedback
-        --bucket=<bucket_name>: Define bucket for restore and list routines
-        --prefix=<prefix>: Define prefix to work on (list, view, size, delete, restore, etc)
         --local=/dir/file: Local file or directory
         --brief: Boolean flag for short display
         --dryrun: Just show what will be done
@@ -85,8 +86,6 @@ declare -r SYNTAX=$(cat <<EOF
 
       Examples:
         ${PROGNAME} --setup-bucket=mybucket
-        ${PROGNAME} --backup --local=/dir/sub --bucket=mybucket --prefix=myprefix
-        ${PROGNAME} --backup-sets [--verbose] [--dryrun]
         ${PROGNAME} --list [--bucket=mybucket] [--prefix=myprefix]
         ${PROGNAME} --view [--bucket=mybucket] [--prefix=myprefix]
         ${PROGNAME} --size [--bucket=mybucket] [--prefix=myprefix]
@@ -95,13 +94,14 @@ declare -r SYNTAX=$(cat <<EOF
         ${PROGNAME} --get='/path/to/file.jpg' --local='file-copy.jpg'
         ${PROGNAME} --get='/path/to/dir' --local='/directory'
         ${PROGNAME} --delete --bucket=mybucket --prefix=myprefix
-
+        ${PROGNAME} --backup=<conf_name> [--verbose] [--dryrun]
+        ${PROGNAME} --backup ('xybersolve' default)
+        ${PROGNAME} --backup=gmp
 EOF
 )
 # files & directories
 declare -r SCRIPT_DIR="$( dirname ${0} )"
 declare -r COMMON_FILE="${SCRIPT_DIR}/s3gback.common.sh"
-declare -r CONF_FILE="${SCRIPT_DIR}/s3gback.conf3.sh"
 declare -r EXCLUDE_LIST_FILE="${SCRIPT_DIR}/s3gback-exclude-list.dat"
 
 # actions
@@ -109,7 +109,6 @@ declare -i SETUP_BUCKET=${FALSE}
 #declare -i MAKE_BUCKET=${FALSE}
 #declare -i SET_LIFECYCLE=${FALSE}
 declare -i BACKUP=${FALSE}
-declare -i BACKUP_SETS=${FALSE}
 declare -i VIEW=${FALSE}
 declare -i LIST=${FALSE}
 declare -i SIZE=${FALSE}
@@ -126,10 +125,6 @@ declare -i VERBOSE=${FALSE}
 declare -i SMS=${FALSE}
 declare -i USE_S3CMD=${TRUE}
 
-# script globals
-declare DIRECTORY=''
-declare PREFIX=''
-declare LOCAL=''
 
 # ---------------------------------------
 # COMMON FUNCTIONS
@@ -177,11 +172,6 @@ confirm() {
 # ---------------------------------------
 source "${COMMON_FILE}" \
   || die "Unable to open configuration file: ${COMMON_FILE}" 1
-
-source "${CONF_FILE}" \
-  || die "Unable to open configuration file: ${CONF_FILE}" 1
-
-declare -r TOPIC_ARN="arn:aws:sns:${REGION}:${ACCOUNT_ID}:${TOPIC_NAME}"
 
 # ********************************
 # Bucket creation routines
@@ -271,8 +261,23 @@ __delete() {
 # Backup routines
 # ********************************
 
+__configure_backup() {
+  # uses the variables from backup conf to build
+  # * topic info: e.g., TOPIC_ARN
+  # * backup info:
+
+  # load backup configuration
+  CONF_NAME=${CONF_NAME:-${DEFAULT_BACKUP_SET}}
+  CONF_FILE="${SCRIPT_DIR}/s3gback.${CONF_NAME}.conf.sh"
+  source "${CONF_FILE}" \
+    || die "Unable to open configuration file: ${CONF_FILE}" 1
+
+  # configure sns topic, also from applied conf
+  TOPIC_ARN="arn:aws:sns:${REGION}:${ACCOUNT_ID}:${TOPIC_NAME}"
+}
+
 # backup sets as defined in config file
-__backup_sets() {
+__backup() {
   local dir
   local bucket
   local src
@@ -284,7 +289,8 @@ __backup_sets() {
   # TODO: Make into flag (arg driven)
   #local show_errors_only='--show-errors-only'
   local show_errors_only=''
-
+  # load backup configuration
+  __configure_backup
   # backup all sets as defined in config file
   # make sure buckets exist
   __ensure_buckets
@@ -292,10 +298,10 @@ __backup_sets() {
   for dir in "${!BACKUP_BUCKET_SETS[@]}"; do
     for bucket in "${BACKUP_BUCKET_SETS[${dir}]}"; do
       # backup each local directory into assigned bucket/dir
-      # * src: BASE_DIR/dir
+      # * src: LOCAL_BASE_DIR/dir
       # * dst: bucket/dir
-      #   -- BASE_DIR/dir -> bucket/dir
-      src="${BASE_DIR}/${dir}"
+      #   -- LOCAL_BASE_DIR/dir -> bucket/dir
+      src="${LOCAL_BASE_DIR}/${dir}"
       dst="${bucket}/${dir}"
       (( VERBOSE )) && echo "Backing up: ${src} -> ${dst}"
 
@@ -335,37 +341,6 @@ __backup_sets() {
   done
 }
 
-# Refactored" 9/25/18
-# simple one off - command line driven backup
-__backup() {
-  local dryrun=$( (( DRYRUN )) && echo '--dryrun' || echo '' )
-  local bucket
-
-  [[ -z ${BUCKET_NAME} ]] && die "Bucket name arg is required" 2
-  [[ -z ${LOCAL} ]] && die "Local directory arg is required" 3
-  [[ -d ${LOCAL} ]] || die "Could not find specified local directory" 4
-
-  [[ -n ${PREFIX} ]] \
-    && bucket="${BUCKET_NAME}/${PREFIX}" \
-    || bucket="${BUCKET_NAME}"
-
-  __ensure_bucket "${BUCKET_NAME}"
-
-  (( VERBOSE )) && echo "Backing up: ${LOCAL} -> ${bucket}"
-
-  echo aws s3 sync --delete \
-    ${LOCAL} s3://${bucket} \
-    --include "*" \
-    --exclude "*/.DS_Store" \
-    --exclude "*.git/*" \
-    --exclude "*venv/*" \
-    --exclude "*site-packages/*" \
-    --exclude "*bower_components/*" \
-    --exclude "*lib/python*" \
-    --exclude "*include/python*" \
-    --exclude "*node_modules/*" ${dryrun}
-}
-
 __restore() {
   # using s3cmd
   #s3cmd restore --recursive s3://${BUCKET_NAME}/${PREFIX}/
@@ -402,7 +377,10 @@ __schedule() {
   # this is the meat of it
   # locally - ${HOME}/bin (SCRIPT_DIR) is where my bash script always reside
   # -- adjust accordingly
-  echo "0 14 * * * ${SCRIPT_DIR}/s3gback --backup" >> "${cron_file}"
+  echo "0 14 * * * ${SCRIPT_DIR}/s3gback --backup=xybersolve" >> "${cron_file}"
+  echo "0 15 * * * ${SCRIPT_DIR}/s3gback --backup=gmp" >> "${cron_file}"
+  echo "0 14 * * * ${SCRIPT_DIR}/s3gback --backup=ancillary" >> "${cron_file}"
+
   #install new cron file
   crontab "${cron_file}"
   # cleanup
@@ -419,9 +397,6 @@ __list() {
     || aws s3 ls s3://${BUCKET_NAME} --recursive
 }
 
-#
-# __view will become interactive drilldown
-#
 __view() {
    [[ -n ${PREFIX} ]] \
     && aws s3 ls s3://${BUCKET_NAME}/${PREFIX}/ --recursive \
@@ -462,8 +437,8 @@ __view() {
 # ********************************
 # Messaging routines
 # ********************************
+# TODO: Refactor SNS rotuines to utilize custom configurations
 
-# TODO: Wire up SNS Messaging
 __create_topic() {
   [[ -z "${TOPIC_ARN}" ]] && die "TOPIC_NAME is not defined" 3
 
@@ -543,10 +518,9 @@ __get_opts() {
         SETUP_BUCKET=${TRUE}
         [[ ${arg} =~ '=' ]] && BUCKET_NAME="${arg#*=}"
         ;;
-      #--make-bucket)      MAKE_BUCKET=${TRUE}   ;;
-      #--set-lifecycle)    SET_LIFECYCLE=${TRUE} ;;
-      --backup)           BACKUP=${TRUE}        ;;
-      --backup-sets)      BACKUP_SETS=${TRUE}   ;;
+      --backup*)           BACKUP=${TRUE}
+        [[ ${arg} =~ '=' ]] && CONF_NAME="${arg#*=}"
+        ;;
       --list|--view)      LIST=${TRUE}          ;;
       --size)             SIZE=${TRUE}          ;;
       --size-all)         SIZE_ALL=${TRUE}      ;;
@@ -573,15 +547,15 @@ __get_opts() {
       --brief)            BRIEF=${TRUE}         ;;
       --verbose)          VERBOSE=${TRUE}       ;;
       --dryrun)           DRYRUN=${TRUE}        ;;
-      --bucket*)
-        [[ ${arg} =~ '=' ]] && BUCKET_NAME="${arg#*=}"
-        ;;
-      --prefix*)
-        [[ ${arg} =~ '=' ]] && PREFIX="${arg#*=}"
-        ;;
-      --local*)
-        [[ ${arg} =~ '=' ]] && LOCAL="${arg#*=}"
-        ;;
+      # --bucket*)
+      #   [[ ${arg} =~ '=' ]] && BUCKET_NAME="${arg#*=}"
+      #   ;;
+      # --prefix*)
+      #   [[ ${arg} =~ '=' ]] && PREFIX="${arg#*=}"
+      #   ;;
+      # --local*)
+      #   [[ ${arg} =~ '=' ]] && LOCAL="${arg#*=}"
+      #   ;;
       *) die "Unknown option: ${arg}" ;;
    esac
   done
@@ -594,7 +568,6 @@ __dispatch() {
   #(( MAKE_BUCKET )) && __make_bucket
   #(( SET_LIFECYCLE )) && __set_lifecycle
   (( BACKUP )) && __backup
-  (( BACKUP_SETS )) && __backup_sets
   (( LIST )) && __list
   (( VIEW )) && __view
   (( RESTORE )) && __restore

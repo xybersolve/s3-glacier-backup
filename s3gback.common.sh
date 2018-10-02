@@ -1,7 +1,27 @@
+# base values
 declare -r REGION='us-west-2'
 declare -r ACCOUNT_ID='734741078887'
 declare -r DEFAULT_MESSAGE='Back up performed'
-declare ADMIN_EMAIL='xybersolve@gmail.com'
+declare -r DEFAULT_BACKUP_SET='xybersolve'
+# ---------------------------
+# auxillary files
+declare -r LIFECYCLE_FILE="${SCRIPT_DIR}/s3gback-lifecycle.json"
+declare -r POLICY_FILE="${SCRIPT_DIR}/s3gback-policy.json"
+# ---------------------------
+# default backup name here
+declare CONF_NAME='gmp'
+# floating backup configuration file
+declare CONF_FILE="${SCRIPT_DIR}/s3gback.${CONF_NAME}.conf.sh"
+# ---------------------------
+# Following variables are (re)defined in the cutomized configurations
+# floating configuration file, for customized sets
+
+# backup
+declare -A BACKUP_BUCKET_SETS=()
+declare LOCAL_BASE_DIR=''
+# sns - topic
+declare TOPIC_ARN=''
 declare TOPIC_NAME='S3-Glacier-Backup'
-declare TOPIC_SUBJECT='S3-Glacier-Backup'
-declare SUBSCRIPTION_ID='7b399f3f-8ac4-4fb7-82a3-4447274632e4'
+declare TOPIC_SUBJECT=''
+declare ADMIN_EMAIL=''
+declare SUBSCRIPTION_ID=''

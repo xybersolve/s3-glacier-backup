@@ -3,8 +3,8 @@
 ## Purpose
 This bash script enables a predefined sets of directories to be backed up to
 specific S3 buckets and transitioned into Glacier storage for more cost effective
-long term archive. It also provides some other s3/Glacier view utilities.
-The backup script can be automated via a cronjob.
+long term archive. It also provides some other s3/Glacier view & maintenance
+utilities. The backup script can be automated cronjob using: __schedule().
 
 > This script depends on `aws s3`, `s3cmd` & `s3api`
 
@@ -59,10 +59,16 @@ within this config file.
 
 ```sh
 
-$ cp s3gback.conf.sample.sh s3gback.conf.sh
-$ vim s3back-conf.sh
+# create custom backup sets in named configuration
+$ cp s3gback.sample.conf.sh s3gback.<name>conf.sh
+$ vim s3back.<name>.conf.sh
+
+# use the defined configuration set
+$ s3back --backup=<name>
 
 ```
+> Note: If using `dist` utility, be sure to include new configurations in the
+distribution array.
 
 ## S3-Glacier Backup Help
 
@@ -116,6 +122,7 @@ $ s3gback --help
 ```
 
 ##### Run at 2am daily:
+Set cronjobs in __schedule function.
 
 ```sh
 

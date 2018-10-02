@@ -1,30 +1,29 @@
 #!/usr/bin/env bash
 #
-#  S3-Glacier Backup
-# -----------------------
-# print backups
-# bucket: <bucket-name>
-# prefixes:
-#  path/
-declare -r LIFECYCLE_FILE="${SCRIPT_DIR}/s3gback-lifecycle.json"
-declare -r BUCKET_NAME='unique-bucket-name-0'
-declare -r PREFIX_NAME=''
-# for simple backup into bucket defined above
-declare -ra BACKUP_DIRS=(
-  /path/to/dir
-  /path/top/dir/2
-)
-#
+#  S3 Glacier Backup Configuration
+#   * Backup definitions
+# -------------------------------------
+# Backup different sets of directories to assigned buckets
+# directory will be appended to bucket name as prefix
+# -------------------------------------
 #   Back Up Bucket Sets
 #   Associative array defines:
-#    ['/directory/to/backup']='unique-bucket/prefix'
-#
-# Backup sets of directories to assigned buckets
-# Use common base directory for al directories, prepended to backup directory
-declare BASE_DIR=/Users/Name
+#    ['/directory/to/backup']='unique-bucket-name'
+# -------------------------------------
+# Target: Name
+# -------------------------------------
+# Common base directory for all backup directories
 
+# SNS Topic
+ADMIN_EMAIL='name@domain.com'
+TOPIC_NAME='S3-Glacier-Backup'
+TOPIC_SUBJECT='Backup: My Backup Title'
+
+# Backup Sets
+USE_S3CMD=${TRUE}
+LOCAL_BASE_DIR=/Users/Name
 # [/directory/to/backup]=unique-bucket/prefix
-declare -rA BACKUP_SETS=(
+BACKUP_SETS=(
   ['/path/to/dir']='unique-backup-name-1'
   ['/path/to/dir/2']='unique-backup-name-1'
   ['/path/to/dir/3']='unique-backup-name-2'

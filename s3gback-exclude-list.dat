@@ -10,3 +10,5 @@
 */include/python*
 */lock.json
 */node_modules/*
+*/.puppetlabs/*
+*/vendor*
