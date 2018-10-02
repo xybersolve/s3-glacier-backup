@@ -260,20 +260,16 @@ __delete() {
 # ********************************
 # Backup routines
 # ********************************
-
 __configure_backup() {
   # uses the variables from backup conf to build
   # * topic info: e.g., TOPIC_ARN
   # * backup info:
 
   # load backup configuration
-  CONF_NAME=${CONF_NAME:-${DEFAULT_BACKUP_SET}}
   CONF_FILE="${SCRIPT_DIR}/s3gback.${CONF_NAME}.conf.sh"
   source "${CONF_FILE}" \
     || die "Unable to open configuration file: ${CONF_FILE}" 1
 
-  # configure sns topic, also from applied conf
-  TOPIC_ARN="arn:aws:sns:${REGION}:${ACCOUNT_ID}:${TOPIC_NAME}"
 }
 
 # backup sets as defined in config file
@@ -289,8 +285,6 @@ __backup() {
   # TODO: Make into flag (arg driven)
   #local show_errors_only='--show-errors-only'
   local show_errors_only=''
-  # load backup configuration
-  __configure_backup
   # backup all sets as defined in config file
   # make sure buckets exist
   __ensure_buckets
@@ -437,7 +431,9 @@ __view() {
 # ********************************
 # Messaging routines
 # ********************************
-# TODO: Refactor SNS rotuines to utilize custom configurations
+__configure_topic() {
+  TOPIC_ARN="arn:aws:sns:${REGION}:${ACCOUNT_ID}:${TOPIC_NAME}"
+}
 
 __create_topic() {
   [[ -z "${TOPIC_ARN}" ]] && die "TOPIC_NAME is not defined" 3
@@ -584,6 +580,8 @@ main() {
   (( ${#} < MIN_ARG_COUNT )) && die "Expects at least ${MIN_ARG_COUNT} arguments" 1
   (( $# > 0 )) && __get_opts "$@"
 
+  __configure_backup
+  __configure_topic
   __dispatch
 
   return 0
