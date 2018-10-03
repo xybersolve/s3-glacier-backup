@@ -342,11 +342,12 @@ __backup() {
           --exclude "*wp-content/themes/*" \
           --exclude "*node_modules/*" \
           --exclude "*.war"
-
-          __send
         fi
       done
   done
+
+  __send_message
+
 }
 
 __restore() {
@@ -488,10 +489,9 @@ __setup_topic() {
   fi
 }
 
-
-__send() {
-  local message="${1:-${DEFAULT_MESSAGE}}"
-  local datetime=$( date +%Y%m%d:%H:%M:%S )
+__send_message() {
+  local message="${1:-${TOPIC_MESSAGE}}"
+  local datetime=$( date +%Y%m%d-%H:%M:%S )
 
   aws sns publish \
     --topic-arn "${TOPIC_ARN}" \
@@ -549,7 +549,7 @@ __get_opts() {
         exit 0
         ;;
       --send)
-        __send
+        __send_message
         exit 0
         ;;
       # Variables & Flags
