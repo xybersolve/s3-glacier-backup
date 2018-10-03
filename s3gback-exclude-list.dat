@@ -12,3 +12,7 @@
 */node_modules/*
 */.puppetlabs/*
 */vendor*
+*/wp-admin/*
+*/wp-includes/*
+*/wp-content/plugins/*
+*/wp-content/themes/*

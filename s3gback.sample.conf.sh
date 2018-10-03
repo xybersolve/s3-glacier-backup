@@ -10,14 +10,14 @@
 #   Associative array defines:
 #    ['/directory/to/backup']='unique-bucket-name'
 # -------------------------------------
-# Target: Name
+# Target: <name>
 # -------------------------------------
 # Common base directory for all backup directories
-
 # SNS Topic
 ADMIN_EMAIL='name@domain.com'
 TOPIC_NAME='S3-Glacier-Backup'
 TOPIC_SUBJECT='Backup: My Backup Title'
+TOPIC_MESSAGE="Backed up ${CONF_NAME}"
 
 # Backup Sets
 USE_S3CMD=${TRUE}

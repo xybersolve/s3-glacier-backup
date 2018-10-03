@@ -15,9 +15,12 @@
 declare GMP_IMG_BUCKET='gregmilliganphotography-image-backup'
 declare GMP_DOC_BUCKET='gregmilliganphotography-doc-backup'
 
+# SNS Topic
 ADMIN_EMAIL='xybersolve@gmail.com'
 TOPIC_NAME='S3-Glacier-Backup'
 TOPIC_SUBJECT='Backup: GregMilliganPhotography Combined'
+TOPIC_MESSAGE="Backed up ${CONF_NAME}"
+
 USE_S3CMD=${TRUE}
 LOCAL_BASE_DIR='/Users/Greg'
 BACKUP_BUCKET_SETS=(

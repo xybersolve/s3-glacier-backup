@@ -34,7 +34,7 @@ within the bucket.
       "Status": "Enabled",
       "Prefix": "",
       "Transition": {
-          "Days": 1,
+          "Days": 0,
           "StorageClass": "GLACIER"
       }
     }
@@ -77,7 +77,10 @@ distribution array.
 $ s3gback --help
 
   Script: s3gback
-  Purpose: Backup to AWS Glacier via S3
+  Purpose: Backup directory sets to AWS Glacier via S3
+  Description: Define bucket for directory set backups in conf file, set conf
+    using --backup=conf-file-name-part
+
   Usage: s3gback [options]
 
   Options:
@@ -86,21 +89,20 @@ $ s3gback --help
 
     Actions:
       --setup-bucket=mybucket: Make bucket and set lifecycle
-      --backup: Simple command line driven backup
-      --backup-sets: Backup sets of defined directories into assigned buckets
+      --backup=<conf-name>: Backup sets of directories into assigned buckets
+          conf-name: defaults to 'xybersolve'
       --list: List or bucket contents, optionally by prefix
       --view: View bucket object info, optionally by prefix
       --size: View size of objects in bucket, optionally by prefix
       --size-all: View size of all buckets (can be slow)
       --restore: Restore objects back into S3 from Glacier (bucket/prefix or all)
       --get<=/path/to/file>: Get a file from S3 copying to local file
-      --delete: delete bucket or object, optionally using prefix
+      --delete: Delete bucket or object, optionally using prefix
+      --schedule: Schedule the archive to be run as cronjob
 
 
     Variables & Flags:
       --verbose: Enable feedback
-      --bucket=<bucket_name>: Define bucket for restore and list routines
-      --prefix=<prefix>: Define prefix to work on (list, view, size, delete, restore, etc)
       --local=/dir/file: Local file or directory
       --brief: Boolean flag for short display
       --dryrun: Just show what will be done
@@ -108,8 +110,6 @@ $ s3gback --help
 
     Examples:
       s3gback --setup-bucket=mybucket
-      s3gback --backup --local=/dir/sub --bucket=mybucket --prefix=myprefix
-      s3gback --backup-sets [--verbose] [--dryrun]
       s3gback --list [--bucket=mybucket] [--prefix=myprefix]
       s3gback --view [--bucket=mybucket] [--prefix=myprefix]
       s3gback --size [--bucket=mybucket] [--prefix=myprefix]
@@ -118,6 +118,9 @@ $ s3gback --help
       s3gback --get='/path/to/file.jpg' --local='file-copy.jpg'
       s3gback --get='/path/to/dir' --local='/directory'
       s3gback --delete --bucket=mybucket --prefix=myprefix
+      s3gback --backup=<conf_name> [--verbose] [--dryrun]
+      s3gback --backup (uses 'gmp' default -> CONF_NAME)
+      s3gback --backup=deployment
 
 ```
 

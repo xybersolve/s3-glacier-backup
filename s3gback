@@ -273,14 +273,18 @@ __configure_backup() {
 }
 
 # backup sets as defined in config file
+# Notes:
+#  s3cmd has cleaner implementation with exclude-from list.
+#  however, aws s3 does provides more consistent file handling on complex backup
+#
 __backup() {
   local dir
   local bucket
   local src
   local dst
   local verbose=''
-  #local dryrun=$( (( DRYRUN )) && echo '--dryrun' || echo '' )
-  local dryrun=$( (( DRYRUN )) && echo '--dry-run' || echo '' )
+  local dryrun=$( (( DRYRUN )) && echo '--dryrun' || echo '' )
+  #local dryrun=$( (( DRYRUN )) && echo '--dry-run' || echo '' )
   local verbose=$( (( VERBOSE )) && echo '--verbose' || echo '' )
   # TODO: Make into flag (arg driven)
   #local show_errors_only='--show-errors-only'
@@ -314,22 +318,32 @@ __backup() {
       else
 
         (( VERBOSE )) && echo "Using: aws s3"
-
-        aws s3 sync --delete \
-          ${src} s3://${dst} \
+        #--dryrun \
+        #--quiet \
+        aws s3 sync "${src}" "s3://${dst}" \
+          --delete \
           --include "*" \
-          --exclude "*/.DS_Store" \
-          --exclude "*/.git/*" \
+          --exclude "*.DS_Store*" \
+          --exclude "*.git/*" \
           --exclude "*/venv/*" \
-          --exclude "*/.terraform*" \
-          --exclude "*/site-packages/*" \
-          --exclude "*/bower_components/*" \
-          --exclude "*/.Python/*" \
-          --exclude "*/lib/python*" \
-          --exclude "*/include/python*" \
-          --exclude "*/lock.json" \
-          --exclude "*/node_modules/*" "${show_errors_only}" "${dryrun}"
+          --exclude "*venv/*" \
+          --exclude "*.terraform/*" \
+          --exclude "*site-packages/*" \
+          --exclude "*bower_components/*" \
+          --exclude "*.Python/*" \
+          --exclude "*lib/python*" \
+          --exclude "*include/python*" \
+          --exclude "*lock.json" \
+          --exclude "*.puppetlabs/*" \
+          --exclude "*vendor/*" \
+          --exclude "*wp-admin/*" \
+          --exclude "*wp-includes/*" \
+          --exclude "*wp-content/plugins/*" \
+          --exclude "*wp-content/themes/*" \
+          --exclude "*node_modules/*" \
+          --exclude "*.war"
 
+          __send
         fi
       done
   done
@@ -405,7 +419,6 @@ __size_all() {
 __size() {
 
   # use s3cmd
-  # s3cmd du s3://${BUCKET_NAME}/${PREFIX}
   if [[ -n ${PREFIX} ]]; then
     s3cmd du "s3://${BUCKET_NAME}/${PREFIX}"
   else
