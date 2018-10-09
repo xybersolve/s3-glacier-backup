@@ -94,7 +94,7 @@ declare -r SYNTAX=$(cat <<EOF
         ${PROGNAME} --delete --bucket=mybucket --prefix=myprefix
         ${PROGNAME} --backup=<conf_name> [--verbose] [--dryrun]
         ${PROGNAME} --backup ('xybersolve' default)
-        ${PROGNAME} --backup=gmp
+        ${PROGNAME} --backup=gmp --quiet
 EOF
 )
 # files & directories
@@ -121,6 +121,7 @@ declare -i SCHEDULE=${FALSE}
 declare -i DRYRUN=${FALSE}
 declare -i BRIEF=${FALSE}
 declare -i VERBOSE=${FALSE}
+declare -i QUIET=${FALSE}
 declare -i SMS=${FALSE}
 declare -i USE_S3CMD=${FALSE}
 
@@ -292,9 +293,8 @@ __backup() {
     || dryrun=$( (( DRYRUN )) && echo '--dryrun' )
 
   #local
-  (( VERBOSE )) \
-    && verbose='--verbose'
-    || quiet='--quiet'
+  (( VERBOSE )) && verbose='--verbose'
+  (( QUIET )) && quiet='--quiet'
 
   # TODO: Make into flag (arg driven)
   #local show_errors_only='--show-errors-only'
@@ -329,9 +329,9 @@ __backup() {
       else
 
         (( VERBOSE )) && echo "Using: aws s3"
-        #--dryrun \
-        #--quiet \
-        aws s3 sync "${src}" "s3://${dst}" "${dryrun}" "${quiet}" \
+
+        #--dryrun,--verbose, --quiet
+        echo aws s3 sync "${src}" "s3://${dst}" "${dryrun}" "${verbose}" "${quiet}" \
           --delete \
           --include "*" \
           --exclude "*.DS_Store*" \
@@ -397,9 +397,9 @@ __schedule() {
   # this is the meat of it
   # locally - ${HOME}/bin (SCRIPT_DIR) is where my bash script always reside
   # -- adjust accordingly
-  echo "0 14 * * * ${SCRIPT_DIR}/s3gback --backup=xybersolve" >> "${cron_file}"
-  echo "0 15 * * * ${SCRIPT_DIR}/s3gback --backup=gmp" >> "${cron_file}"
-  echo "0 14 * * * ${SCRIPT_DIR}/s3gback --backup=ancillary" >> "${cron_file}"
+  echo "0 2 * * * ${SCRIPT_DIR}/s3gback --backup=xybersolve --quiet" >> "${cron_file}"
+  echo "0 3 * * * ${SCRIPT_DIR}/s3gback --backup=gmp --quiet" >> "${cron_file}"
+  echo "0 4 * * * ${SCRIPT_DIR}/s3gback --backup=ancillary --quiet" >> "${cron_file}"
 
   #install new cron file
   crontab "${cron_file}"
@@ -566,6 +566,7 @@ __get_opts() {
       # Variables & Flags
       --brief)            BRIEF=${TRUE}         ;;
       --verbose)          VERBOSE=${TRUE}       ;;
+      --quiet)            QUIET=${TRUE}         ;;
       --dryrun)           DRYRUN=${TRUE}        ;;
       # --bucket*)
       #   [[ ${arg} =~ '=' ]] && BUCKET_NAME="${arg#*=}"
@@ -583,6 +584,9 @@ __get_opts() {
 }
 
 __dispatch() {
+  # --quiet supercedes --verbose
+  (( QUIET )) && VERBOSE=${FALSE}
+
   # S3/Glaceir Backup
   (( SETUP_BUCKET )) && __setup_bucket
   #(( MAKE_BUCKET )) && __make_bucket
@@ -596,6 +600,7 @@ __dispatch() {
   (( SIZE )) && __size
   (( SIZE_ALL )) && __size_all
   (( SCHEDULE )) && __schedule
+
 
   return 0
 }
