@@ -7,23 +7,33 @@ declare BIN_DIR=~/bin
 
 __copy() {
   # move project files into script bin
+  local separator='-----------------------'
   local file=''
+  local -ra dirs=(
+    's3gback.conf'
+  )
+
   local -ra files=(
     's3gback'
     's3gback.common.sh'
-    's3gback.ancillary.conf.sh'
-    's3gback.gmp.conf.sh'
-    's3gback.xybersolve.conf.sh'
     's3gback-lifecycle.json'
     's3gback-exclude-list.dat'
   )
-  printf "\n"
+
+  printf "%s\n" "${separator}"
   for file in "${files[@]}"; do
     cp "${file}" "${BIN_DIR}" \
       && printf "👍🏻  Copied: %s to %s\n" "${file}" "${BIN_DIR}"
   done
-  printf "\n"
+  printf "%s\n" "${separator}"
+  for dir in "${dirs[@]}"; do
+    cp -r "${dir}" "${BIN_DIR}" \
+      && printf "👍🏻  Copied: %s to %s\n" "${dir}" "${BIN_DIR}"
+  done
+  printf "%s\n" "${separator}"
+
 }
+
 
 __control() {
   ssh control mkdir -p /home/ubuntu/bin/xs-swarm

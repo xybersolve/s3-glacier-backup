@@ -21,7 +21,7 @@ TOPIC_NAME='S3-Glacier-Backup'
 TOPIC_SUBJECT='Backup: GregMilliganPhotography Combined'
 TOPIC_MESSAGE="Backed up ${CONF_NAME}"
 
-USE_S3CMD=${TRUE}
+USE_S3CMD=${FALSE}
 LOCAL_BASE_DIR='/Users/Greg'
 BACKUP_BUCKET_SETS=(
   ['Pictures/Drone_Shots']="${GMP_IMG_BUCKET}"

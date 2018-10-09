@@ -53,9 +53,7 @@ declare -ri MIN_ARG_COUNT=1
 declare -r SYNTAX=$(cat <<EOF
 
     Script: ${PROGNAME}
-    Purpose: Backup directory sets to AWS Glacier via S3
-    Description: Define bucket for directory set backups in conf file, set conf
-      using --backup=conf-file-name-part
+    Purpose: Backup directory sets to AWS Glacier via S3.
 
     Usage: ${PROGNAME} [options]
 
@@ -101,6 +99,7 @@ EOF
 )
 # files & directories
 declare -r SCRIPT_DIR="$( dirname ${0} )"
+declare -r CONF_DIR="${SCRIPT_DIR}/s3gback.conf"
 declare -r COMMON_FILE="${SCRIPT_DIR}/s3gback.common.sh"
 declare -r EXCLUDE_LIST_FILE="${SCRIPT_DIR}/s3gback-exclude-list.dat"
 
@@ -123,7 +122,7 @@ declare -i DRYRUN=${FALSE}
 declare -i BRIEF=${FALSE}
 declare -i VERBOSE=${FALSE}
 declare -i SMS=${FALSE}
-declare -i USE_S3CMD=${TRUE}
+declare -i USE_S3CMD=${FALSE}
 
 
 # ---------------------------------------
@@ -266,7 +265,8 @@ __configure_backup() {
   # * backup info:
 
   # load backup configuration
-  CONF_FILE="${SCRIPT_DIR}/s3gback.${CONF_NAME}.conf.sh"
+  CONF_FILE="${CONF_DIR}/${CONF_NAME}.conf.sh"
+
   source "${CONF_FILE}" \
     || die "Unable to open configuration file: ${CONF_FILE}" 1
 
@@ -283,9 +283,19 @@ __backup() {
   local src
   local dst
   local verbose=''
-  local dryrun=$( (( DRYRUN )) && echo '--dryrun' || echo '' )
-  #local dryrun=$( (( DRYRUN )) && echo '--dry-run' || echo '' )
-  local verbose=$( (( VERBOSE )) && echo '--verbose' || echo '' )
+  local dryrun=''
+  local quiet=''
+
+  # set dryrun flag for aws s3 or s3cmd
+  (( USE_S3CMD )) \
+    && dryrun=$( (( DRYRUN )) && echo '--dry-run' ) \
+    || dryrun=$( (( DRYRUN )) && echo '--dryrun' )
+
+  #local
+  (( VERBOSE )) \
+    && verbose='--verbose'
+    || quiet='--quiet'
+
   # TODO: Make into flag (arg driven)
   #local show_errors_only='--show-errors-only'
   local show_errors_only=''
@@ -301,6 +311,7 @@ __backup() {
       #   -- LOCAL_BASE_DIR/dir -> bucket/dir
       src="${LOCAL_BASE_DIR}/${dir}"
       dst="${bucket}/${dir}"
+
       (( VERBOSE )) && echo "Backing up: ${src} -> ${dst}"
 
       if (( USE_S3CMD )); then
@@ -320,7 +331,7 @@ __backup() {
         (( VERBOSE )) && echo "Using: aws s3"
         #--dryrun \
         #--quiet \
-        aws s3 sync "${src}" "s3://${dst}" \
+        aws s3 sync "${src}" "s3://${dst}" "${dryrun}" "${quiet}" \
           --delete \
           --include "*" \
           --exclude "*.DS_Store*" \

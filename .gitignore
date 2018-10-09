@@ -26,5 +26,5 @@ node_modules
 npm-debug.log
 
 # project specific
-s3gback.xybersolve.conf.sh
-s3gback.ancillary.conf.sh
+/s3gback.conf/xybersolve.conf.sh
+/s3gback.conf/ancillary.conf.sh

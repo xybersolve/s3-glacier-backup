@@ -20,7 +20,7 @@ TOPIC_SUBJECT='Backup: My Backup Title'
 TOPIC_MESSAGE="Backed up ${CONF_NAME}"
 
 # Backup Sets
-USE_S3CMD=${TRUE}
+USE_S3CMD=${FALSE}
 LOCAL_BASE_DIR=/Users/Name
 # [/directory/to/backup]=unique-bucket/prefix
 BACKUP_SETS=(

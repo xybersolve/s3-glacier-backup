@@ -8,8 +8,8 @@ declare -r POLICY_FILE="${SCRIPT_DIR}/s3gback-policy.json"
 # ---------------------------
 # default backup name here
 declare CONF_NAME='gmp'
-# floating backup configuration file
-declare CONF_FILE="${SCRIPT_DIR}/s3gback.${CONF_NAME}.conf.sh"
+# floating customizable backup configuration file(s)
+declare CONF_FILE="${CONF_DIR}/${CONF_NAME}.conf.sh"
 # ---------------------------
 # Following variables are (re)defined in the cutomized configurations
 # floating configuration file, for customized sets
