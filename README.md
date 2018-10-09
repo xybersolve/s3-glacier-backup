@@ -16,6 +16,12 @@ Glacier is great for inexpensive cold storage backups. Using S3 as a
 conduit enables better view and control of said content, especially from
 the command line.
 
+### Kludge Proviso:
+Where this script is a bit unkempt is in the `aws s3` backup hardcoded excludes.
+This will optimally be moved into an external file and unwrapped as command
+parameters. `s3cmd` provides for an, rsync like, exclude file, bit `aws s3 sync`
+does not. Until then, adjust the code per your own needs.
+
 ### Dependencies
 * Depends on `aws s3`, `s3cmd` & `s3api`, install these prior to using script.
 * Expects AWS credentials to be configured elsewhere.
