@@ -73,6 +73,7 @@ declare -r SYNTAX=$(cat <<EOF
         --get<=/path/to/file>: Get a file from S3 copying to local file
         --delete: Delete bucket or object, optionally using prefix
         --schedule: Schedule the archive to be run as cronjob
+        --kill-backup: Kill (background) backup process, with confirmation
 
 
       Variables & Flags:
@@ -95,6 +96,7 @@ declare -r SYNTAX=$(cat <<EOF
         ${PROGNAME} --backup=<conf_name> [--verbose] [--dryrun]
         ${PROGNAME} --backup ('xybersolve' default)
         ${PROGNAME} --backup=gmp --quiet
+        ${PROGNAME} --kill-backup
 EOF
 )
 # files & directories
@@ -286,6 +288,7 @@ __backup() {
   local verbose=''
   local dryrun=''
   local quiet=''
+  local -a params=()
 
   # set dryrun flag for aws s3 or s3cmd
   (( USE_S3CMD )) \
@@ -293,7 +296,6 @@ __backup() {
     || dryrun=$( (( DRYRUN )) && echo '--dryrun' )
 
   #local
-  (( VERBOSE )) && verbose='--verbose'
   (( QUIET )) && quiet='--quiet'
 
   # TODO: Make into flag (arg driven)
@@ -327,11 +329,11 @@ __backup() {
           ${show_errors_only} ${dryrun} ${verbose} ${src} s3://${dst}/
 
       else
-
         (( VERBOSE )) && echo "Using: aws s3"
 
-        #--dryrun,--verbose, --quiet
-        echo aws s3 sync "${src}" "s3://${dst}" "${dryrun}" "${verbose}" "${quiet}" \
+        (( DRYRUN )) && params+=('--dryrun')
+        (( QUIET )) && params+=('--quiet')
+        aws s3 sync "${src}" "s3://${dst}" "${params[@]}" \
           --delete \
           --include "*" \
           --exclude "*.DS_Store*" \
@@ -405,6 +407,19 @@ __schedule() {
   crontab "${cron_file}"
   # cleanup
   rm "${cron_file}"
+}
+
+__kill() {
+  local line=''
+  local pid=''
+  line=$( ps aux | grep 's3gback --backup' | grep -v 'grep' )
+  echo "Got: ${line}"
+  pid=$( echo ${line} | awk '{print $2}')
+  if confirm "Are you sure you want to delete: ${pid}"; then
+    kill "${pid}"
+  else
+    echo "User aborted!"
+  fi
 }
 
 # ********************************
@@ -568,6 +583,10 @@ __get_opts() {
       --verbose)          VERBOSE=${TRUE}       ;;
       --quiet)            QUIET=${TRUE}         ;;
       --dryrun)           DRYRUN=${TRUE}        ;;
+      --kill-backup)
+        __kill
+        exit 0
+        ;;
       # --bucket*)
       #   [[ ${arg} =~ '=' ]] && BUCKET_NAME="${arg#*=}"
       #   ;;

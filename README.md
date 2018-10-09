@@ -89,6 +89,7 @@ $ s3gback --help
       --get<=/path/to/file>: Get a file from S3 copying to local file
       --delete: Delete bucket or object, optionally using prefix
       --schedule: Schedule the archive to be run as cronjob
+      --kill-backup: Kill (background) backup process, with confirmation
 
     Variables & Flags:
       --verbose: Enable feedback
@@ -109,7 +110,8 @@ $ s3gback --help
       s3gback --delete --bucket=mybucket --prefix=myprefix
       s3gback --backup=<conf_name> [--verbose] [--dryrun]
       s3gback --backup ('xybersolve' default)
-      s3gback --backup=gmp
+      s3gback --backup=gmp --quiet
+      s3gback --kill-backup
 
 
 
