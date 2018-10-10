@@ -30,6 +30,6 @@ BACKUP_BUCKET_SETS=(
   ['Pictures/MilliganMedia']="${GMP_IMG_BUCKET}"
   ['Pictures/Mobile_Images']="${GMP_IMG_BUCKET}"
   ['Pictures/RV']="${GMP_IMG_BUCKET}"
-  #['Pictures/Photoshop']="${GMP_PS_BUCKET}"
+  ['Pictures/Photoshop']="${GMP_PS_BUCKET}"
   ['Documents/MilliganMedia']="${GMP_DOC_BUCKET}"
 )
