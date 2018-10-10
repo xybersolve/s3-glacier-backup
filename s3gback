@@ -229,9 +229,6 @@ __ensure_bucket() {
   else
     (( VERBOSE )) && echo "make bucket: ${bucket}"
     __setup_bucket "${bucket}"
-    #__make_bucket "${bucket}"
-    #__set_policy
-    #__set_lifecycle
   fi
 }
 
