@@ -16,51 +16,68 @@ Glacier is great for inexpensive cold storage backups. Using S3 as a
 conduit enables better view and control of said content, especially from
 the command line.
 
-### Kludge Proviso:
-Where this script is a bit unkempt is in the `aws s3` backup hardcoded excludes.
-This will optimally be moved into an external file and unwrapped as command
-parameters. `s3cmd` provides for an, rsync like, exclude file, bit `aws s3 sync`
-does not. Until then, adjust the code per your own needs.
 
 ### Dependencies
 * Depends on `aws s3`, `s3cmd` & `s3api`, install these prior to using script.
 * Expects AWS credentials to be configured elsewhere.
 
+### Expected Behavior
+Once your bucket sets are defined in your custom backup configuration file
+(see 'Configuration Notes' below). Running the backup should:
+
+* Create the bucket, when it is not already present
+* Set the bucket lifecycle to automatically transition storage to Glacier
+* Backup defined directories and files recursively to said bucket(s)
+* Subsequent backups will only backup new files and deletes files no longer in use.
+
+###### Feedback Flags
+* `--verbose`: Get more granular feedback
+* `--dryrun`: See what will be backed up, without actually backing up, this
+will create the buckets.
+
+###### Example backup running on new set and bucket
+```sh
+
+$ s3gback --backup=gmp
+
+> make_bucket: gregmilliganphotography-photoshop-backup
+> set bucket lifecycle: gregmilliganphotography-photoshop-backup
+> upload: ../../Pictures/Photoshop/3rd Party Wedding Shots...
+> upload: ../../Pictures/Photoshop/3rd Party Wedding Shots...
+...
+
+```
 
 ### Configuration Notes:
 * `sample.conf.sh` is a stubbed out sample of required custom
 configuration file. All backup configuration files are and should be located in
- the `./33gback.conf` directory.
+the `./s3gback.conf` directory.
 
-* `gmp.conf.sh` is a simple backup left for instruction.
+* `gmp.conf.sh` is a simple backup config left in for instructional purposes.
 
 To define and run your own backup sets, do the following.
 
 ```sh
 
-# create custom backup sets in named configuration
+# create custom backup sets in named configuration file, from sample:
 $ cd ./s3gback.conf
-$ cp sample.conf.sh <name>conf.sh
+$ cp sample.conf.sh <name>.conf.sh
 $ vim <name>.conf.sh
 $ cd ..
 
-# optional: move to bin directory
+# optional: move scripts to bin directory
 $ ./dist --copy
 
 # setup your backup sets
 # then invoke your defined backup sets, as so:
 $ s3gback --backup=<name>
 
-# if not using `./dist`
-./s3gback --backup=<name
+# if not using `./dist`, run in place
+$ ./s3gback --backup=<name
 
 ```
 > All custom backup configurations should be located in the s3gback.conf
-directory and named using the <name>.conf.sh format.
-
-> Note: If using this `dist` script to propagate files to your bin
-directory, be sure to include your new configuration file in the
-`files` distribution array, defined in the `__copy` function in `dist`.
+directory and use the `<name>.conf.sh` naming format.
 
 ## S3-Glacier Backup Syntax
 
@@ -184,7 +201,8 @@ Set cron jobs in __schedule function.
   -----------------------
 
 ```
-
-
+### TODOs:
+[ ] `aws s3 sync` Move excludes to external list and unwrapped for call.
+[ ] Cron schedules to external file and read in by `__schedule`
 
 ## [License](LICENSE.md)
