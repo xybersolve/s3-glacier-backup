@@ -74,7 +74,7 @@ declare -r SYNTAX=$(cat <<EOF
         --delete: Delete bucket or object, optionally using prefix
         --schedule: Schedule the archive to be run as cronjob
         --kill-backup: Kill (background) backup process, with confirmation
-
+        --prerun: Test run operations defined '__prerun'
 
       Variables & Flags:
         --verbose: Enable feedback
@@ -118,6 +118,7 @@ declare -i DELETE=${FALSE}
 declare -i RESTORE=${FALSE}
 declare -i GET=${FALSE}
 declare -i SCHEDULE=${FALSE}
+declare -i PRERUN=${FALSE}
 
 # flags
 declare -i DRYRUN=${FALSE}
@@ -286,6 +287,14 @@ __backup() {
   local dryrun=''
   local quiet=''
   local -a params=()
+
+  # run operations preceding backup, found in config __prerun
+  if type -t __prerun &>/dev/null; then
+    (( VERBOSE )) && echo "Running __prerun"
+    __prerun
+  else
+    (( VERBOSE )) && echo "No pre run: __prerun was not defined"
+  fi
 
   # set dryrun flag for aws s3 or s3cmd
   (( USE_S3CMD )) \
@@ -563,7 +572,13 @@ __get_opts() {
       --get*)             GET=${TRUE}
         [[ ${arg} =~ '=' ]] && PREFIX="${arg#*=}"
         ;;
-      --setup-topic) # debug
+
+      # Debug and Testing
+      --prerun)
+        __prerun
+        exit 0
+        ;;
+      --setup-topic)
         __setup_topic
         exit 0
         ;;
@@ -575,6 +590,7 @@ __get_opts() {
         __send_message
         exit 0
         ;;
+
       # Variables & Flags
       --brief)            BRIEF=${TRUE}         ;;
       --verbose)          VERBOSE=${TRUE}       ;;

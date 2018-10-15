@@ -33,3 +33,9 @@ BACKUP_BUCKET_SETS=(
   ['Pictures/Photoshop']="${GMP_PS_BUCKET}"
   ['Documents/MilliganMedia']="${GMP_DOC_BUCKET}"
 )
+
+# Put any operations in __prerun which should lead backup
+__prerun() {
+  # remove colon and place code here to run prior to backup
+  :
+}

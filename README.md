@@ -132,6 +132,49 @@ $ s3gback --help
 
 
 
+
+```
+
+## Pre-run Operations
+If you have operations which you need to run prior to the backup, place them in
+`__preun` function in the custom backup-set config file. Below is an hypothetical
+example, which copies dotfiles to a dotfile directory, which is subsequently
+backed up. Or, maybe a DB dump.
+
+```sh
+
+__prerun() {
+  local -r dotfiles_dir=~/dotfiles/files
+  local -ra files=(
+    '.alias'
+    '.ansible.cfg'
+    '.bashrc'
+    '.bash_profile'
+    '.curlrc'
+    '.functions'
+    '.gitconfig'
+    '.gitignore'
+    '.logout'
+    '.npmrc'
+    '.profile'
+    '.tmux.conf'
+    '.viminfo'
+    '.vimrc'
+  )
+
+  [[ -d ${dotfiles_dir} ]] || mkdir ${dotfiles_dir}
+
+  for file in "${files[@]}"; do
+    cp ~/${file} ${dotfiles_dir}
+  done
+}
+
+```
+#### Testing Pre Run Operations
+
+```sh
+  $ s3gback --prerun
+
 ```
 
 ## S3 Lifecycle  and Glacier

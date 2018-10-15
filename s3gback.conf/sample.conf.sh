@@ -29,3 +29,9 @@ BACKUP_SETS=(
   ['/path/to/dir/3']='unique-backup-name-2'
   ['/path/to/dir/4']='unique-backup-name-2'
 )
+
+# Put any operations in __prerun which should lead backup
+__prerun() {
+  # remove colon and place code here to run prior to backup
+  :
+}
