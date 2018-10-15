@@ -36,16 +36,20 @@ __copy() {
 
 
 __control() {
-  ssh control mkdir -p /home/ubuntu/bin/xs-swarm
-  scp -r ~/bin/xs-swarm/* control:/home/ubuntu/bin/xs-swarm/
+  # copy to bastion, 'control'
+  local -r dir ='s3-glacier-backup'
+  ssh control mkdir -p /home/ubuntu/bin/${dir}
+  scp -r ~/bin/${dir}/* control:/home/ubuntu/bin/${dir}/
 }
 #
-# Flags are for extensibility
+# Flags are for extensibility,
+#  * currently all comibnations result in copy, except (help, --help)
 #
 declare FLAG=${1:-help}
 case ${FLAG} in
   --copy|copy) __copy; exit 0; ;;
   --all|all) __copy; exit 0;  ;;
+  --control) __control; exit 0; ;;
   --help|help)
     echo '
     Usage
@@ -55,7 +59,5 @@ case ${FLAG} in
     '
     exit 0
     ;;
+    *) __copy; exit 0; ;;
 esac
-
-# in case we get no flags, copy (for now)
-__copy
